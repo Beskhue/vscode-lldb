@@ -1,17 +1,6 @@
 {
-    "lldb.launch.initCommands": [
-        "platform shell echo 'init'"
-    ],
-    "lldb.launch.env": {
-        "TEST": "folder"
-    },
-    "lldb.dbgconfig": {
-        "foo": "FOO",
-        "bar": "${dbgconfig:foo}",
-        "baz": "${dbgconfig:quoox}",
-        "quoox": "${dbgconfig:foo} ${dbgconfig:bleh}",
-        "bleh": [
-            "${dbgconfig:foo}", "${dbgconfig:bar}"
-        ]
-    }
+    "lldb.logLevel": 0,
+    "lldb.executable": "/home/chega/NW/llvm-build/build/bin/lldb"
+    //"lldb.useCodeLLDB": true,
+    //"lldb.launch.debugServer": 4711
 }

@@ -24,27 +24,120 @@
 			"program": "${workspaceFolder}/tools/debug_stub.py",
 		},
 		{
+			"name": "codelldb",
+			"preLaunchTask": "build codelldb",
+			"type": "lldb",
+			"request": "launch",
+			"program": "${workspaceFolder}/out/adapter2/codelldb",
+			"args": [
+				"--multi-session",
+				"--port=4711"
+			],
+			"env": {
+				//"PATH": "${env:PATH};C:\\Python37-64",
+				"RUST_LOG": "error,codelldb=debug",
+				"RUST_LOG_STYLE": "always",
+				"RUST_BACKTRACE": "1",
+			},
+			"sourceLanguages": [
+				"cpp",
+				"rust"
+			],
+			"terminal": "integrated"
+		},
+		{
+			"name": "codelldb attach",
+			"type": "lldb",
+			"request": "attach",
+			"program": "${workspaceFolder}/out/adapter2/codelldb",
+			"sourceLanguages": [
+				"cpp",
+				"rust"
+			],
+		},
+		{
+			"name": "codelldb cppvsdbg",
+			"type": "cppvsdbg",
+			"request": "launch",
+			"preLaunchTask": "build codelldb",
+			"program": "${workspaceFolder}/out/adapter2/codelldb.exe",
+			"args": [
+				"--multi-session"
+			],
+			"stopAtEntry": false,
+			"cwd": "${workspaceFolder}",
+			"environment": [
+				{
+					"name": "PATH",
+					"value": "${env:PATH};C:\\Python36-64;C:\\mingw-w64\\x86_64-8.1.0-win32-seh-rt_v6-rev0\\mingw64\\bin"
+				},
+				{
+					"name": "RUST_LOG",
+					"value": "error,codelldb=debug"
+				},
+				{
+					"name": "RUST_LOG_STYLE",
+					"value": "always"
+				},
+				{
+					"name": "RUST_BACKTRACE",
+					"value": "full"
+				},
+			],
+			//"externalConsole": true,
+			"sourceFileMap": {
+				"C:\\_work\\4\\s": "c:\\NW\\cpython"
+			}
+		},
+		{
+			"name": "test codelldb",
+			"preLaunchTask": "cargo build",
+			"type": "lldb",
+			"request": "launch",
+			"cargo": {
+				"args": [
+					"test",
+					"--lib",
+					"--no-run",
+					"-p",
+					"codelldb"
+				]
+			},
+			"args": [
+				"--nocapture",
+				"--test-threads=1"
+			],
+			"env": {
+				"PATH": "${env:PATH}:/usr/lib/llvm-6.0/bin",
+				"RUST_LOG": "debug",
+				"RUST_BACKTRACE": "1",
+			},
+			"sourceLanguages": [
+				"cpp",
+				"rust"
+			],
+			"terminal": "integrated"
+		},
+		{
 			"name": "tests",
-			"preLaunchTask": "npm: build",
+			"preLaunchTask": "npm: build:extension",
 			"type": "node",
 			"request": "launch",
 			"cwd": "${workspaceRoot}",
 			"program": "${workspaceRoot}/node_modules/mocha/bin/_mocha",
-			"runtimeArgs": [
-				"--nolazy",
-				"--harmony"
-			],
 			"args": [
 				"-u", "tdd",
 				"--timeout", "999999",
 				"--colors",
 				"--exit",
-				//"-g", "variables",
+				"-g", "run program",
 				"./out/tests"
 			],
 			"env": {
-				"LLDB_LOGFILE": "${workspaceRoot}/adapter.log",
+				"USE_CODELLDB": "1",
 				"LLDB_EXECUTABLE": "${config:lldb.executable}",
+				"RUST_LOG": "error,codelldb=debug",
+				"RUST_BACKTRACE": "full"
 			},
 			"sourceMaps": true,
 			"outFiles": [

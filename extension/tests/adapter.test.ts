@@ -4,14 +4,13 @@ import * as assert from 'assert';
 import * as path from 'path';
 import * as cp from 'child_process';
 import * as fs from 'fs';
+import * as net from 'net';
 import { DebugClient } from 'vscode-debugadapter-testsupport';
 import { DebugProtocol as dp } from 'vscode-debugprotocol';
-import { format } from 'util';
+import { format, promisify, inspect } from 'util';
 
-import * as ver from '../ver';
 import * as util from '../util';
-
-var dc: DebugClient;
+import { networkInterfaces } from 'os';
 
 const projectDir = path.join(__dirname, '..', '..');
 
@@ -22,56 +21,31 @@ const debuggeeHeader = path.normalize(path.join(projectDir, 'debuggee', 'cpp', '
 const rusttypes = path.join(projectDir, 'debuggee', 'out', 'rusttypes');
 const rusttypesSource = path.normalize(path.join(projectDir, 'debuggee', 'rust', 'types.rs'));
 
-var port: number = null;
-if (process.env.DEBUG_SERVER) {
-    port = parseInt(process.env.DEBUG_SERVER)
-    console.log('Debug server port:', port)
-}
+const sleepAsync = promisify(setTimeout);
+const openFileAsync = promisify(fs.open);
 
-suite('Versions', () => {
-    test('comparisons', async () => {
-        assert.ok(ver.lt('1.0.0', '2.0.0'));
-        assert.ok(ver.lt('2.0.0', '2.2.0'));
-        assert.ok(ver.lt('2.0', '2.0.0'));
-        assert.ok(ver.lt('2.0.0', '2.2'));
-        assert.ok(ver.lt('2.0.0', '100.0.0'));
-    })
-})
-
-suite('Util', () => {
-    test('expandVariables', async () => {
-        function expander(type: string, key: string) {
-            if (type == 'echo') return key;
-            if (type == 'reverse') return key.split('').reverse().join('');
-            throw new Error('Unknown ' + type + ' ' + key);
-        }
-
-        assert.equal(util.expandVariables('', expander), '');
-        assert.equal(util.expandVariables('AAAA${echo:TEST}BBBB', expander), 'AAAATESTBBBB');
-        assert.equal(util.expandVariables('AAAA${}${echo:FOO}BBBB${reverse:BAR}CCCC', expander),
-            'AAAA${}FOOBBBBRABCCCC');
-        assert.throws(() => util.expandVariables('sdfhksadjfh${hren:FOO}wqerqwer', expander));
-    })
-
-    test('mergeValues', async () => {
-        assert.deepEqual(util.mergeValues(10, undefined), 10);
-        assert.deepEqual(util.mergeValues(false, true), true);
-        assert.deepEqual(util.mergeValues(10, 0), 0);
-        assert.deepEqual(util.mergeValues("100", "200"), "200");
-        assert.deepEqual(util.mergeValues(
-            [1, 2], [3, 4]),
-            [1, 2, 3, 4]);
-        assert.deepEqual(util.mergeValues(
-            { a: 1, b: 2, c: 3 }, { a: 10, d: 40 }),
-            { a: 10, b: 2, c: 3, d: 40 });
-    })
-})
+var dc = new DebugClient('', '', 'lldb');
 
 suite('Adapter tests', () => {
 
-    setup(startAdapter);
+    suiteTeardown(() => {
+        dc.stop();
+    });
 
-    teardown(stopAdapter);
+    setup(async () => {
+        var port = null;
+        if (process.env.DEBUG_SERVER) {
+            port = parseInt(process.env.DEBUG_SERVER)
+        } else {
+            port = await startDebugAdapter();
+        }
+        //console.log('Debug server port:', port)
+        dc.start(port);
+    });
+    teardown(async () => {
+        dc.stop();
+        await sleepAsync(100);
+    });
 
     suite('Basic', () => {
 
@@ -353,7 +327,7 @@ suite('Adapter tests', () => {
                 reg_struct_ref: '{a:1, c:12}',
                 opt_reg_struct1: 'Some({...})',
                 opt_reg_struct2: 'None',
-                array: '(5) [1, 2, 3, 4, 5]',
+                array: { '[0]': 1, '[1]': 2, '[2]': 3, '[3]': 4, '[4]': 5 },
                 slice: '(5) &[1, 2, 3, 4, 5]',
                 vec_int: {
                     $: '(10) vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]',
@@ -415,13 +389,48 @@ suite('Adapter tests', () => {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-function startAdapter() {
-    dc = new DebugClient('node', './out/tests/launcher.js', 'lldb');
-    return dc.start(port);
-}
+async function startDebugAdapter(): Promise<number> {
+    let extensionRoot = path.join(__dirname, '..', '..');
 
-function stopAdapter() {
-    dc.stop();
+    var adapter: cp.ChildProcess;
+    if (process.env.USE_CODELLDB) {
+        var adapterLog = 2;
+        if (process.env.ADAPTER_LOG) {
+            adapterLog = await openFileAsync(process.env.ADAPTER_LOG, 'w');
+        }
+        adapter = cp.spawn('out/adapter2/codelldb', [], {
+            stdio: ['ignore', 'pipe', adapterLog],
+            cwd: extensionRoot,
+            env: Object.assign({ RUST_LOG: 'error,codelldb=debug' }, process.env)
+        });
+    } else {
+        var lldb = 'lldb';
+        if (process.env.LLDB_EXECUTABLE) {
+            lldb = process.env.LLDB_EXECUTABLE;
+        }
+        let params: any = { logLevel: 40 };
+        if (process.env.ADAPTER_LOG) {
+            params = {
+                logLevel: 0,
+                logFile: process.env.ADAPTER_LOG
+            };
+        }
+        let args = ['-b', '-Q',
+            '-O', format('command script import \'%s\'', path.join(extensionRoot, 'adapter')),
+            '-O', format('script adapter.run_tcp_session(0 ,\'%s\')', new Buffer(JSON.stringify(params)).toString('base64'))
+        ]
+        adapter = cp.spawn(lldb, args, {
+            stdio: ['ignore', 'pipe', adapterLog],
+            cwd: extensionRoot,
+        });
+    }
+
+    let regex = new RegExp('^Listening on port (\\d+)\\s', 'm');
+    let match = await util.waitForPattern(adapter, adapter.stdout, regex);
+    let port = parseInt(match[1]);
+    await sleepAsync(0); // Staves off a race condition inside DebugClient.
+    adapter.stdout.pipe(process.stderr);
+    return port;
 }
 
 function findMarker(file: string, marker: string): number {

@@ -1,6 +1,10 @@
 **
 !adapter/**/*.py
 !out/*.js
-!syntaxes
-!*.md
-!images
+!out/adapter2/*
+!images/*
+!syntaxes/*
+!README.md
+!LICENSE
+!MANUAL.md
+!CHANGELOG.md
