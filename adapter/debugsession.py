@@ -1237,7 +1237,7 @@ class DebugSession:
         n = var.GetNumChildren()
         for i in xrange(0, n):
             child = var.GetChildAtIndex(i)
-            name = child.GetName()
+            name = child.GetName() or ''
             value = child.GetValue()
             if value is not None:
                 if size > 0:

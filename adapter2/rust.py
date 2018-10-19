@@ -21,6 +21,7 @@ serial = 0
 def __lldb_init_module(debugger, internal_dict):
     global module
     log.info('Initializing, module name=%s', __name__)
+    return
 
     #debugger.HandleCommand('script import adapter.formatters.rust')
     module.rust_category = debugger.CreateCategory('Rust')
@@ -148,12 +149,13 @@ def string_from_ptr(pointer, length):
     if length <= 0:
         return u''
     error = lldb.SBError()
-    process = pointer.GetProcess()
+    log.info('value valid: %s', pointer.IsValid())
+    process = lldb.process #pointer.GetProcess()
     data = process.ReadMemory(pointer.GetValueAsUnsigned(), length, error)
     if error.Success():
         return data.decode('utf8', 'replace')
     else:
-        log.error('%s', error.GetCString())
+        log.error('ReadMemory error: %s', error.GetCString())
 
 def get_obj_summary(valobj, unavailable='{...}'):
     summary = valobj.GetSummary()
