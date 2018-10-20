@@ -25,7 +25,6 @@ def analyze(sbvalue):
     if qual_type_name in analyzed:
         return
     analyzed[qual_type_name] = True
-    return
 
     #log.info('expressions.analyze for %s %d', sbvalue.GetType().GetName(), sbvalue.GetType().GetTypeClass())
     if not rust_analyze:

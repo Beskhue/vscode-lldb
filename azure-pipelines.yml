@@ -1,5 +1,17 @@
 variables:
-  lldbBuildId: '20181020.2'
+  lldbBuildId: 162
+
+  setenvLinux: |
+      export LLDB_ROOT=$(System.ArtifactsDirectory)/lldb-linux
+      export PATH=$HOME/.cargo/bin:$LLDB_ROOT/bin:$PATH
+  setenvOSX: |
+      export LLDB_ROOT=$(System.ArtifactsDirectory)/lldb-osx
+      export PATH=$HOME/.cargo/bin:$LLDB_ROOT/bin:$PATH
+  setenvWindows: |
+      set LLDB_ROOT=$(System.ArtifactsDirectory)\lldb-windows
+      set PATH=%USERPROFILE%\.cargo\bin;%LLDB_ROOT%\bin;%PATH%
+      set PYTHONHOME=%USEPYTHONVERSION_PYTHONLOCATION%
+      set PYTHONPATH=%PYTHONHOME%\Lib;%PYTHONHOME%\DLLs
 
 ##########################################
 
@@ -17,26 +29,50 @@ jobs:
   - task: DownloadBuildArtifacts@0
     inputs:
       buildType: specific
-      project: 'vadimcn'
-      pipeline: 'llvm-build'
+      project: 'llvm-build'
+      pipeline: 'vadimcn.llvm-build'
       buildVersionToDownload: specific
       buildId: $(lldbBuildId)
       downloadType: single
-      artifactName: 'Linux LLDB'
+      artifactName: 'lldb-linux'
+    displayName: 'Download LLDB'
 
   - script: |
-      sudo apt-get install python-lldb-4.0 -y
       echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope
       curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly-x86_64-unknown-linux-gnu
       npm install
     displayName: 'Setup'
 
   - script: |
-      export PATH="$HOME/.cargo/bin:$PATH"
-      export LLDB_EXECUTABLE=lldb-4.0
-      export LLDB_LOGFILE=$HOME/lldb.log
-      npm test
-    displayName: 'Test'
+      $(setenvLinux)
+      chmod +x $LLDB_ROOT/bin/*
+      npm run build
+    displayName: 'Build'
+
+  - script: |
+      $(setenvLinux)
+      export ADAPTER_LOG=/tmp/adapter.test.log
+      npm run test:adapter
+    displayName: 'Test1'
+    condition: always()
+
+  - script: |
+      $(setenvLinux)
+      export ADAPTER_LOG=/tmp/adapter2.test.log
+      npm run test:adapter2
+    displayName: 'Test2'
+    condition: always()
+
+  - script: |
+      cat /tmp/adapter.test.log
+      echo ------------------------
+      cat /tmp/adapter2.test.log
+      echo - env ------------------
+      env
+      echo - dir -----------------------
+      ls -R $(System.ArtifactsDirectory)
+    displayName: 'On Failure'
+    condition: failed()
 
 ##########################################
 
@@ -53,23 +89,55 @@ jobs:
   - task: DownloadBuildArtifacts@0
     inputs:
       buildType: specific
-      project: 'vadimcn'
-      pipeline: 'llvm-build'
+      project: 'llvm-build'
+      pipeline: 'vadimcn.llvm-build'
       buildVersionToDownload: specific
       buildId: $(lldbBuildId)
       downloadType: single
-      artifactName: 'OSX LLDB'
+      artifactName: 'lldb-osx'
+    displayName: 'Download LLDB'
 
   - script: |
       curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly-x86_64-apple-darwin
       npm install
     displayName: 'Setup'
 
+  # - script: |
+  #     ls -l `which lldb`
+  #     find / -name debugserver
+  #   displayName: 'Info'
+
   - script: |
-      export PATH="$HOME/.cargo/bin:$PATH"
-      export LLDB_LOGFILE=$HOME/lldb.log
-      npm test
-    displayName: 'Test'
+      $(setenvOSX)
+      cp $XCODE_10_DEVELOPER_DIR/../SharedFrameworks/LLDB.framework/Versions/A/Resources/debugserver $LLDB_ROOT/bin
+      chmod +x $LLDB_ROOT/bin/*
+      npm run build
+    displayName: 'Build'
+
+  - script: |
+      $(setenvOSX)
+      export ADAPTER_LOG=/tmp/adapter.test.log
+      npm run test:adapter
+    displayName: 'Test1'
+    condition: always()
+
+  - script: |
+      $(setenvOSX)
+      export ADAPTER_LOG=/tmp/adapter2.test.log
+      npm run test:adapter2
+    displayName: 'Test2'
+    condition: always()
+
+  - script: |
+      cat /tmp/adapter.test.log
+      echo ------------------------
+      cat /tmp/adapter2.test.log
+      echo - env ------------------
+      env
+      echo - dir -----------------------
+      ls -R $(System.ArtifactsDirectory)
+    displayName: 'On Failure'
+    condition: failed()
 
  ##########################################
 
@@ -92,34 +160,49 @@ jobs:
   - task: DownloadBuildArtifacts@0
     inputs:
       buildType: specific
-      project: 'vadimcn'
-      pipeline: 'llvm-build'
+      project: 'llvm-build'
+      pipeline: 'vadimcn.llvm-build'
       buildVersionToDownload: specific
       buildId: $(lldbBuildId)
       downloadType: single
-      artifactName: 'Windows LLDB'
+      artifactName: 'lldb-windows'
+    displayName: 'Download LLDB'
 
   - script: |
-      curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly-x86_64-pc-windows-gnu
-      curl -L https://github.com/vadimcn/lldb/releases/download/0.0.0/lldb.zip -o %TEMP%\lldb.zip
-      unzip %TEMP%\lldb.zip -d %AGENT_BUILDDIRECTORY%
+      curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly-x86_64-pc-windows-msvc
       npm install
     displayName: 'Setup'
 
   - script: |
-      set PATH=%USERPROFILE%\.cargo\bin;%AGENT_BUILDDIRECTORY%\lldb\bin;%PATH%
-      set LLDB_EXECUTABLE=lldb.exe
-      set LLDB_LOGFILE=%TEMP%\lldb.log
-      set PYTHONHOME=%USEPYTHONVERSION_PYTHONLOCATION%
-      set PYTHONPATH=%PYTHONHOME%\Lib;%PYTHONHOME%\DLLs
-      npm test
-    displayName: 'Test'
+      $(setenvWindows)
+      npm run build
+    displayName: 'Build'
 
   - script: |
-      type %TEMP%\lldb.log
+      $(setenvWindows)
+      set ADAPTER_LOG=%TEMP%\adapter.test.log
+      npm run test:adapter
+    displayName: 'Test1'
+    condition: always()
+
+  - script: |
+      $(setenvWindows)
+      set ADAPTER_LOG=%TEMP%\adapter2.test.log
+      npm run test:adapter2
+    displayName: 'Test2'
+    condition: always()
+
+  - script: |
+      type %TEMP%\adapter.test.log
+      echo ------------------------
+      type %TEMP%\adapter2.test.log
       echo - env ------------------
       set
       echo - dir -----------------------
-      dir /s %AGENT_BUILDDIRECTORY%
+      dir /s $(System.ArtifactsDirectory)
+      echo -----------------------------
+      env
+      echo -----------------------------
+      ls -R $(System.ArtifactsDirectory)
     displayName: 'On Failure'
     condition: failed()

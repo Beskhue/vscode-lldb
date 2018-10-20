@@ -59,8 +59,6 @@ def __lldb_init_module(debugger, internal_dict):
     attach_synthetic_to_type(StdRefCellBorrowSynthProvider, r'^core::cell::Ref<.+>$', True)
     attach_synthetic_to_type(StdRefCellBorrowSynthProvider, r'^core::cell::RefMut<.+>$', True)
 
-    attach_synthetic_to_type(StdHashMapSynthProvider, r'^std::collections::hash::map::HashMap<.+>$', True)
-
     target = debugger.GetSelectedTarget()
     for module in target.modules:
         analyze_module(module)
@@ -148,7 +146,6 @@ def string_from_ptr(pointer, length):
     if length <= 0:
         return u''
     error = lldb.SBError()
-    log.info('value valid: %s', pointer.IsValid())
     process = pointer.GetProcess()
     data = process.ReadMemory(pointer.GetValueAsUnsigned(), length, error)
     if error.Success():
@@ -539,12 +536,3 @@ class StdRefCellSynthProvider(DerefSynthProvider):
 class StdRefCellBorrowSynthProvider(DerefSynthProvider):
     def initialize(self):
         self.deref = gcm(self.valobj, 'value').Dereference()
-
-##################################################################################################################
-
-class StdHashMapSynthProvider(RustSynthProvider):
-    def initialize(self):
-        self.table = gcm(self.valobj, 'table')
-
-    def get_summary(self):
-        return self.table.GetType().GetNumberOfTemplateArguments()

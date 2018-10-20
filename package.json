@@ -49,11 +49,11 @@
 		"build:adapter2": "python tools/build_codelldb.py",
 		"build:debuggee:cpp": "python tools/build_debuggee.py",
 		"build:debuggee:rust": "rustc debuggee/rust/types.rs -g -o debuggee/out/rusttypes",
-		"build": "npm run build:extension && npm run build:debuggee:cpp && npm run build:debuggee:rust",
+		"build": "npm run build:extension && npm run build:adapter2 && npm run build:debuggee:cpp && npm run build:debuggee:rust",
 		"test:adapter": "mocha -u tdd --timeout 10000 --exit ./out/tests",
 		"test:adapter2": "USE_CODELLDB=1 mocha -u tdd --timeout 10000 --exit ./out/tests",
 		"test:internals": "python tools/test_internals.py",
-		"test": "npm run build:extension && npm run build:adapter2 && npm run build:debuggee:cpp && npm run build:debuggee:rust && npm run test:internals && npm run test:adapter"
+		"test": "npm run test:internals && npm run test:adapter"
 	},
 	"main": "./out/main",
 	"activationEvents": [

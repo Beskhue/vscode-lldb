@@ -10,15 +10,12 @@ fn main() {
     }
     #[cfg(target_os = "macos")]
     {
-        println!(
-            "cargo:rustc-link-search=framework={}",
-            "/Library/Developer/CommandLineTools/Library/PrivateFrameworks"
-        );
-        println!("cargo:rustc-link-lib=framework={}", "LLDB");
+        println!("cargo:rustc-link-search={}/lib", std::env::var("LLDB_ROOT").unwrap());
+        println!("cargo:rustc-link-lib={}", "lldb");
     }
     #[cfg(windows)]
     {
-        println!("cargo:rustc-link-search={}", "C:\\NW\\ll\\build\\lib");
-        println!("cargo:rustc-link-lib={}", "_lldb");
+        println!("cargo:rustc-link-search={}/lib", std::env::var("LLDB_ROOT").unwrap());
+        println!("cargo:rustc-link-lib={}", "liblldb");
     }
 }

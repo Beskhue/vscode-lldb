@@ -19,7 +19,6 @@ extern crate lldb;
 #[macro_use]
 extern crate log;
 extern crate bytes;
-extern crate clap;
 extern crate env_logger;
 extern crate globset;
 extern crate regex;
@@ -32,8 +31,6 @@ extern crate tokio_threadpool;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 use std::net;
-
-use clap::{App, Arg, SubCommand};
 
 use futures::prelude::*;
 use tokio::prelude::*;
@@ -61,30 +58,10 @@ mod stdio_channel;
 mod terminal;
 mod wire_protocol;
 
-macro_rules! extract {
-    ($compound:ident => $pattern:pat => $vars:expr) => {
-        match $compound {
-            $pattern => $vars,
-            _ => unreachable!(),
-        }
-    };
-}
-
 #[no_mangle]
-pub extern "C" fn entry(args: &[&str]) {
+pub extern "C" fn entry(port: u16, multi_session: bool) {
     env_logger::Builder::from_default_env().init();
     SBDebugger::initialize();
-
-    let matches = App::new("codelldb")
-        .arg(Arg::with_name("multi-session").long("multi-session"))
-        .arg(Arg::with_name("port").long("port").takes_value(true))
-        .get_matches_from(args);
-
-    let multi_session = matches.is_present("multi-session");
-    let port = matches
-        .value_of("port") //
-        .map(|s| s.parse().unwrap())
-        .unwrap_or(0);
 
     let localhost = net::Ipv4Addr::new(127, 0, 0, 1);
     let addr = net::SocketAddr::new(localhost.into(), port);

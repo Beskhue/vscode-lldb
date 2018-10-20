@@ -6,7 +6,12 @@
       "type": "npm",
       "script": "build",
       "problemMatcher": "$tsc",
-      "group": "build"
+      "group": "build",
+      "options": {
+        "env": {
+          "LLDB_ROOT": "${config:lldb.dbgconfig.lldbRoot}"
+        }
+      }
     },
     {
       "type": "npm",
@@ -46,6 +51,11 @@
       "label": "build codelldb",
       "type": "shell",
       "command": "clear; python ${workspaceFolder}/tools/build_codelldb.py ${workspaceFolder}",
+      "options": {
+        "env": {
+          "LLDB_ROOT": "${config:lldb.dbgconfig.lldbRoot}"
+        }
+      },
       "problemMatcher": [
         "$rustc"
       ],

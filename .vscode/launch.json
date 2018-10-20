@@ -22,6 +22,7 @@
 			"request": "launch",
 			"pythonPath": "${workspaceFolder}/tools/debug_launcher.py",
 			"program": "${workspaceFolder}/tools/debug_stub.py",
+			"env": { "LLDB_EXECUTABLE": "${config:lldb.executable}" }
 		},
 		{
 			"name": "codelldb",
@@ -30,6 +31,7 @@
 			"request": "launch",
 			"program": "${workspaceFolder}/out/adapter2/codelldb",
 			"args": [
+				"--liblldb=${workspaceFolder}/out/lldb/lib/liblldb.so",
 				"--multi-session",
 				"--port=4711"
 			],
