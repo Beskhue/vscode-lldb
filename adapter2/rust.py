@@ -21,7 +21,6 @@ serial = 0
 def __lldb_init_module(debugger, internal_dict):
     global module
     log.info('Initializing, module name=%s', __name__)
-    return
 
     #debugger.HandleCommand('script import adapter.formatters.rust')
     module.rust_category = debugger.CreateCategory('Rust')
@@ -150,7 +149,7 @@ def string_from_ptr(pointer, length):
         return u''
     error = lldb.SBError()
     log.info('value valid: %s', pointer.IsValid())
-    process = lldb.process #pointer.GetProcess()
+    process = pointer.GetProcess()
     data = process.ReadMemory(pointer.GetValueAsUnsigned(), length, error)
     if error.Success():
         return data.decode('utf8', 'replace')
@@ -440,14 +439,13 @@ class FFISliceSynthProvider(StringLikeSynthProvider):
     def ptr_and_len(self, valobj):
         process = valobj.GetProcess()
         slice_ptr = valobj.GetLoadAddress()
-        data_ptr_type = valobj.GetType().GetBasicType(lldb.eBasicTypeChar).GetPointerType()
+        data_ptr_type = valobj.GetTarget().GetBasicType(lldb.eBasicTypeChar).GetPointerType()
         # Unsized slice objects have incomplete debug info, so here we just assume standard slice
         # reference layout: [<pointer to data>, <data size>]
         error = lldb.SBError()
-        return (
-            valobj.CreateValueFromAddress('data', slice_ptr, data_ptr_type),
-            process.ReadPointerFromMemory(slice_ptr + process.GetAddressByteSize(), error)
-        )
+        pointer = valobj.CreateValueFromAddress('data', slice_ptr, data_ptr_type)
+        length = process.ReadPointerFromMemory(slice_ptr + process.GetAddressByteSize(), error)
+        return pointer, length
 
 class StdCStrSynthProvider(FFISliceSynthProvider):
     def ptr_and_len(self, valobj):
