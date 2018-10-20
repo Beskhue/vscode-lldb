@@ -1,3 +1,8 @@
+variables:
+  lldbBuildId: '20181020.2'
+
+##########################################
+
 jobs:
 - job: Linux
   pool:
@@ -8,6 +13,16 @@ jobs:
     inputs:
       versionSpec: '8.x'
     displayName: 'Install Node.js'
+
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: specific
+      project: 'vadimcn'
+      pipeline: 'llvm-build'
+      buildVersionToDownload: specific
+      buildId: $(lldbBuildId)
+      downloadType: single
+      artifactName: 'Linux LLDB'
 
   - script: |
       sudo apt-get install python-lldb-4.0 -y
@@ -34,6 +49,16 @@ jobs:
     inputs:
       versionSpec: '8.x'
     displayName: 'Install Node.js'
+
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: specific
+      project: 'vadimcn'
+      pipeline: 'llvm-build'
+      buildVersionToDownload: specific
+      buildId: $(lldbBuildId)
+      downloadType: single
+      artifactName: 'OSX LLDB'
 
   - script: |
       curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly-x86_64-apple-darwin
@@ -63,6 +88,16 @@ jobs:
       versionSpec: '3.6'
       addToPath: true
       architecture: 'x64'
+
+  - task: DownloadBuildArtifacts@0
+    inputs:
+      buildType: specific
+      project: 'vadimcn'
+      pipeline: 'llvm-build'
+      buildVersionToDownload: specific
+      buildId: $(lldbBuildId)
+      downloadType: single
+      artifactName: 'Windows LLDB'
 
   - script: |
       curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly-x86_64-pc-windows-gnu
