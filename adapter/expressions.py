@@ -14,8 +14,8 @@ analyzed = {} # A list of type names we've already analyzed
 type_callbacks = { None: [] } # A per-language list of type analyzers
 
 # Register callback that will be invoked once on all matching SBType's before they are displayed by the debugger
-def register_type_callback(analyzer, language, type_class_mask):
-    type_callbacks.setdefault(language, []).append((analyzer, type_class_mask))
+def register_type_callback(callback, language, type_class_mask):
+    type_callbacks.setdefault(language, []).append((type_class_mask, callback))
 
 # Analyze value's type to make sure the appropriate visualizers are attached.
 def analyze(sbvalue):
@@ -30,11 +30,11 @@ def analyze(sbvalue):
     language = sbvalue.GetFrame().GetCompileUnit().GetLanguage()
     type_class = value_type.GetTypeClass()
 
-    # Run registered analyzers
-    for callback, type_class_mask in type_callbacks.get(None): # These get called for all languages
+    # Run registered callbacks
+    for type_class_mask, callback in type_callbacks.get(None): # These get called for all languages
         if type_class & type_class_mask != 0:
             callback(value_type)
-    for callback, type_class_mask in type_callbacks.get(language, []):
+    for type_class_mask, callback in type_callbacks.get(language, []):
         if type_class & type_class_mask != 0:
             callback(value_type)
 

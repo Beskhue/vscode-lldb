@@ -1,61 +1,39 @@
 {
   "version": "2.0.0",
   "problemMatcher": [],
+  "type": "shell",
+  "command": "cmake",
+  "args": [
+    "--build", "build", "--target"
+  ],
   "tasks": [
     {
-      "type": "npm",
-      "script": "build",
-      "problemMatcher": "$tsc",
+      "label": "extension",
       "group": "build",
-      "options": {
-        "env": {
-          "LLDB_ROOT": "${config:lldb.dbgconfig.lldbRoot}"
-        }
-      }
+      "problemMatcher": "$tsc"
     },
     {
-      "type": "npm",
-      "script": "build:extension",
-      "problemMatcher": "$tsc",
+      "label": "tests",
       "group": "build"
     },
     {
-      "type": "npm",
-      "script": "build:debuggee:cpp",
-      "problemMatcher": "$gcc",
+      "label": "lldb",
       "group": "build"
     },
     {
-      "type": "npm",
-      "script": "build:debuggee:rust",
-      "problemMatcher": "$rustc",
+      "label": "codelldb",
       "group": "build"
     },
     {
-      "type": "shell",
-      "label": "cargo build",
+      "label": "debuggee",
+      "group": "build"
+    },
+    {
+      "label": "check",
       "command": "cargo",
       "args": [
-        "build"
+        "check"
       ],
-    },
-    {
-      "type": "shell",
-      "label": "cargo build",
-      "command": "cargo build",
-      "problemMatcher": [
-        "$rustc"
-      ]
-    },
-    {
-      "label": "build codelldb",
-      "type": "shell",
-      "command": "clear; python ${workspaceFolder}/tools/build_codelldb.py ${workspaceFolder}",
-      "options": {
-        "env": {
-          "LLDB_ROOT": "${config:lldb.dbgconfig.lldbRoot}"
-        }
-      },
       "problemMatcher": [
         "$rustc"
       ],
@@ -63,35 +41,9 @@
     },
     {
       "type": "shell",
-      "label": "cargo check",
-      "command": "clear; cargo check",
-      "problemMatcher": [
-        "$rustc"
-      ],
+      "label": "Start extension host",
+      "command": "code --extensionDevelopmentPath=${workspaceRoot}/build ${workspaceRoot}/debuggee",
       "group": "build"
     },
-    {
-      "type": "shell",
-      "label": "cargo test",
-      "command": "cargo",
-      "args": [
-        "test", "-p", "codelldb"
-      ],
-      "problemMatcher": [
-        "$rustc"
-      ],
-      "group": "test"
-    },
-    {
-      "type": "shell",
-      "label": "start extension host",
-      "command": "code --extensionDevelopmentPath=${workspaceRoot} ${workspaceRoot}/debuggee",
-      "group": "build"
-    },
-    {
-      "type": "shell",
-      "label": "cargo expand lldb",
-      "command": "cargo expand --manifest-path=adapter2/deps/lldb/Cargo.toml >/tmp/expanded.rs",
-    }
   ]
 }

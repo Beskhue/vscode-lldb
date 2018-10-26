@@ -631,11 +631,13 @@ impl DebugSession {
                 .and_then(|bp_id| self.target.find_breakpoint_by_id(*bp_id))
             {
                 Some(bp) => bp,
-                None => if req.name.starts_with("/re ") {
-                    self.target.breakpoint_create_by_regex(&req.name[4..])
-                } else {
-                    self.target.breakpoint_create_by_name(&req.name)
-                },
+                None => {
+                    if req.name.starts_with("/re ") {
+                        self.target.breakpoint_create_by_regex(&req.name[4..])
+                    } else {
+                        self.target.breakpoint_create_by_name(&req.name)
+                    }
+                }
             };
 
             let bp_info = BreakpointInfo {
@@ -736,15 +738,17 @@ impl DebugSession {
 
     fn is_valid_source_bp_location(&self, bp_loc: &SBBreakpointLocation, bp_info: &BreakpointInfo) -> bool {
         match &bp_info.kind {
-            BreakpointKind::Source { file_path, .. } => if let Some(le) = bp_loc.address().line_entry() {
-                if let Some(local_path) = self.map_filespec_to_local(&le.file_spec()) {
-                    &local_path[..] == file_path
+            BreakpointKind::Source { file_path, .. } => {
+                if let Some(le) = bp_loc.address().line_entry() {
+                    if let Some(local_path) = self.map_filespec_to_local(&le.file_spec()) {
+                        &local_path[..] == file_path
+                    } else {
+                        false
+                    }
                 } else {
                     false
                 }
-            } else {
-                false
-            },
+            }
             _ => true,
         }
     }
@@ -792,20 +796,24 @@ impl DebugSession {
         }
         let mut launch_info = SBLaunchInfo::new();
 
-        // TODO: Streaming iterator?
-        let env: Vec<String> = env::vars().map(|(k, v)| format!("{}={}", k, v)).collect();
-        launch_info.set_environment_entries(env.iter().map(|s| s.as_ref()), true);
+        // Merge environment
+        let mut launch_env = HashMap::new();
+        for (k, v) in env::vars() {
+            launch_env.insert(k, v);
+        }
+        if let Some(ref env) = args.env {
+            for (k, v) in env {
+                launch_env.insert(k.clone(), v.clone());
+            }
+        }
+        let launch_env = launch_env.iter().map(|(k,v)| format!("{}={}", k, v)).collect::<Vec<String>>();
+        launch_info.set_environment_entries(launch_env.iter().map(|s| s.as_ref()), false);
 
         if let Some(ref ds) = args.display_settings {
             self.update_display_settings(ds);
         }
         if let Some(ref args) = args.args {
             launch_info.set_arguments(args.iter().map(|a| a.as_ref()), false);
-        }
-        if let Some(ref env) = args.env {
-            // TODO: Streaming iterator?
-            let env: Vec<String> = env.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
-            launch_info.set_environment_entries(env.iter().map(|s| s.as_ref()), true);
         }
         if let Some(ref cwd) = args.cwd {
             launch_info.set_working_directory(&cwd);
@@ -890,7 +898,7 @@ impl DebugSession {
             };
             attach_info.set_process_id(pid);
         } else if let Some(program) = args.program {
-            attach_info.set_executable(&program);
+            attach_info.set_executable(&self.find_executable(&program));
         } else {
             unreachable!()
         }
@@ -929,6 +937,20 @@ impl DebugSession {
             Err(err) => return Err(err.into()),
         };
         Ok(target)
+    }
+
+    fn find_executable<'a>(&self, program: &'a str) -> Cow<'a , str> {
+        // On Windows, also try program + '.exe'
+        // TODO: use selected platform instead of cfg!(windows)
+        if cfg!(windows) {
+            if !Path::new(program).is_file() {
+                let program = format!("{}.exe", program);
+                if Path::new(&program).is_file() {
+                    return program.into();
+                }
+            }
+        }
+        program.into()
     }
 
     fn configure_stdio(&mut self, args: &LaunchRequestArguments, launch_info: &mut SBLaunchInfo) -> Result<(), Error> {
@@ -1119,11 +1141,13 @@ impl DebugSession {
     fn in_disassembly(&mut self, frame: &SBFrame) -> bool {
         match self.show_disassembly {
             Some(v) => v,
-            None => if let Some(le) = frame.line_entry() {
-                self.map_filespec_to_local(&le.file_spec()).is_none()
-            } else {
-                true
-            },
+            None => {
+                if let Some(le) = frame.line_entry() {
+                    self.map_filespec_to_local(&le.file_spec()).is_none()
+                } else {
+                    true
+                }
+            }
         }
     }
 
@@ -1807,9 +1831,11 @@ impl DebugSession {
         if flags & SBProcessEvent::BroadcastBitStateChanged != 0 {
             match process_event.process_state() {
                 ProcessState::Running | ProcessState::Stepping => self.notify_process_running(),
-                ProcessState::Stopped => if !process_event.restarted() {
-                    self.notify_process_stopped()
-                },
+                ProcessState::Stopped => {
+                    if !process_event.restarted() {
+                        self.notify_process_stopped()
+                    }
+                }
                 ProcessState::Crashed | ProcessState::Suspended => self.notify_process_stopped(),
                 ProcessState::Exited => {
                     let exit_code = self.process.exit_status() as i64;
@@ -1929,6 +1955,11 @@ impl DebugSession {
         } else if flags & SBTargetEvent::BroadcastBitSymbolsLoaded != 0 {
             for module in event.modules() {
                 self.console_message(format!("Symbols loaded: {}", module.symbol_filespec().path()));
+            }
+        } else if flags & SBTargetEvent::BroadcastBitModulesUnloaded != 0 {
+            for module in event.modules() {
+                let mut message = format!("Module Unloaded: {}", module.filespec().path());
+                self.console_message(message);
             }
         }
     }

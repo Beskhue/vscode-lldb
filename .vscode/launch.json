@@ -3,35 +3,38 @@
 	"configurations": [
 		{
 			"name": "extension",
-			"preLaunchTask": "npm: build",
+			"preLaunchTask": "extension",
 			"type": "extensionHost",
 			"request": "launch",
 			"runtimeExecutable": "${execPath}",
 			"args": [
-				"--extensionDevelopmentPath=${workspaceRoot}"
+				"--extensionDevelopmentPath=${workspaceRoot}/build"
 			],
 			"stopOnEntry": false,
 			"sourceMaps": true,
 			"outFiles": [
-				"${workspaceRoot}/out/**/*.js"
+				"${workspaceRoot}/build/extension/**/*.js"
 			]
 		},
 		{
-			"name": "launch adapter",
+			"name": "adapter",
 			"type": "python",
 			"request": "launch",
+			"preLaunchTask": "lldb",
 			"pythonPath": "${workspaceFolder}/tools/debug_launcher.py",
 			"program": "${workspaceFolder}/tools/debug_stub.py",
-			"env": { "LLDB_EXECUTABLE": "${config:lldb.executable}" }
+			"env": {
+				"LLDB_EXECUTABLE": "${workspaceFolder}/build/lldb/bin/lldb"
+			}
 		},
 		{
 			"name": "codelldb",
-			"preLaunchTask": "build codelldb",
+			"preLaunchTask": "codelldb",
 			"type": "lldb",
 			"request": "launch",
-			"program": "${workspaceFolder}/out/adapter2/codelldb",
+			"program": "${workspaceFolder}/build/adapter2/codelldb",
 			"args": [
-				"--liblldb=${workspaceFolder}/out/lldb/lib/liblldb.so",
+				"--lldb=${workspaceFolder}/build/lldb",
 				"--multi-session",
 				"--port=4711"
 			],
@@ -48,48 +51,38 @@
 			"terminal": "integrated"
 		},
 		{
-			"name": "codelldb attach",
-			"type": "lldb",
-			"request": "attach",
-			"program": "${workspaceFolder}/out/adapter2/codelldb",
-			"sourceLanguages": [
-				"cpp",
-				"rust"
-			],
+			"name": "codelldb python",
+			"type": "python",
+			"request": "launch",
+			"host": "localhost",
+			"port": 3000,
+			"pythonPath": "bash",
+			//"program": "${workspaceFolder}/tools/dummy.py"
+			// "request": "attach",
+			// "port": 3000,
+			// "host": "localhost"
 		},
 		{
 			"name": "codelldb cppvsdbg",
 			"type": "cppvsdbg",
 			"request": "launch",
-			"preLaunchTask": "build codelldb",
-			"program": "${workspaceFolder}/out/adapter2/codelldb.exe",
+			"preLaunchTask": "codelldb",
+			"program": "${workspaceFolder}/build/adapter2/codelldb.exe",
 			"args": [
-				"--multi-session"
+				"--lldb=${workspaceFolder}/build/lldb",
+				"--multi-session",
+				"--port=4711"
 			],
 			"stopAtEntry": false,
 			"cwd": "${workspaceFolder}",
 			"environment": [
-				{
-					"name": "PATH",
-					"value": "${env:PATH};C:\\Python36-64;C:\\mingw-w64\\x86_64-8.1.0-win32-seh-rt_v6-rev0\\mingw64\\bin"
-				},
-				{
-					"name": "RUST_LOG",
-					"value": "error,codelldb=debug"
-				},
-				{
-					"name": "RUST_LOG_STYLE",
-					"value": "always"
-				},
-				{
-					"name": "RUST_BACKTRACE",
-					"value": "full"
-				},
+				{ "name": "PATH", "value":"${env:PATH};C:\\Python36-64;C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\BuildTools\\DIA SDK\\bin\\amd64" },
+				{ "name":"RUST_LOG", "value":"error,codelldb=debug"},
+				{ "name":"RUST_LOG_STYLE", "value":"always"},
+				{ "name":"RUST_BACKTRACE", "value":"full"},
 			],
 			//"externalConsole": true,
-			"sourceFileMap": {
-				"C:\\_work\\4\\s": "c:\\NW\\cpython"
-			}
+			"sourceFileMap": { "C:\\_work\\4\\s": "c:\\NW\\cpython" }
 		},
 		{
 			"name": "test codelldb",
@@ -122,7 +115,7 @@
 		},
 		{
 			"name": "tests",
-			"preLaunchTask": "npm: build:extension",
+			"preLaunchTask": "tests",
 			"type": "node",
 			"request": "launch",
 			"cwd": "${workspaceRoot}",
@@ -132,19 +125,26 @@
 				"--timeout", "999999",
 				"--colors",
 				"--exit",
-				"-g", "run program",
-				"./out/tests"
+				//"-g", "stop on a breakpoint",
+				"build/tests/tests"
 			],
 			"env": {
-				"USE_CODELLDB": "1",
-				"LLDB_EXECUTABLE": "${config:lldb.executable}",
+				//"USE_CODELLDB": "1",
+				"TARGET_TRIPLE": "x86_64-pc-windows-gnu",
 				"RUST_LOG": "error,codelldb=debug",
 				"RUST_BACKTRACE": "full"
 			},
 			"sourceMaps": true,
 			"outFiles": [
-				"${workspaceRoot}/out/**/*.js"
+				"${workspaceRoot}/build/extension/**/*.js",
+				"${workspaceRoot}/build/tests/**/*.js"
 			]
+		}
+	],
+	"compounds": [
+		{
+			"name": "codelldb + python",
+			"configurations": ["codelldb", "codelldb python"]
 		}
 	]
 }

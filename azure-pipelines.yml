@@ -1,15 +1,13 @@
 variables:
-  lldbBuildId: 162
+  lldbBuildId: 275
+  runTests: true
 
   setenvLinux: |
-      export LLDB_ROOT=$(System.ArtifactsDirectory)/lldb-linux
-      export PATH=$HOME/.cargo/bin:$LLDB_ROOT/bin:$PATH
+      export PATH=$HOME/.cargo/bin:$PATH
   setenvOSX: |
-      export LLDB_ROOT=$(System.ArtifactsDirectory)/lldb-osx
-      export PATH=$HOME/.cargo/bin:$LLDB_ROOT/bin:$PATH
+      export PATH=$HOME/.cargo/bin:$PATH
   setenvWindows: |
-      set LLDB_ROOT=$(System.ArtifactsDirectory)\lldb-windows
-      set PATH=%USERPROFILE%\.cargo\bin;%LLDB_ROOT%\bin;%PATH%
+      set PATH=%USERPROFILE%\.cargo\bin;%PATH%
       set PYTHONHOME=%USEPYTHONVERSION_PYTHONLOCATION%
       set PYTHONPATH=%PYTHONHOME%\Lib;%PYTHONHOME%\DLLs
 
@@ -34,34 +32,52 @@ jobs:
       buildVersionToDownload: specific
       buildId: $(lldbBuildId)
       downloadType: single
-      artifactName: 'lldb-linux'
+      artifactName: 'lldb'
+      itemPattern: 'lldb/lldb-linux.zip'
+      downloadPath: '$(Agent.WorkFolder)/D'
     displayName: 'Download LLDB'
 
   - script: |
-      echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope
+      unzip $(Agent.WorkFolder)/D/lldb/lldb-linux.zip -d $(Agent.WorkFolder)/D/lldb-linux
       curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly-x86_64-unknown-linux-gnu
+      echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope
       npm install
-    displayName: 'Setup'
+      sudo npm install -g vsce
+    displayName: 'Install'
 
   - script: |
       $(setenvLinux)
-      chmod +x $LLDB_ROOT/bin/*
-      npm run build
+      mkdir build
+      cd build
+      cmake -DLLDB_ROOT=$(Agent.WorkFolder)/D/lldb-linux ..
+    displayName: 'Configure'
+
+  - script: |
+      $(setenvLinux)
+      cmake --build build --target vsix_portable
+      cmake -E copy build/vscode-lldb-portable.vsix $(Build.ArtifactStagingDirectory)/vscode-lldb-portable.vsix
+      cmake --build build --target vsix_full
+      cmake -E copy build/vscode-lldb-full.vsix $(Build.ArtifactStagingDirectory)/vscode-lldb-linux.vsix
     displayName: 'Build'
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: 'vscode-lldb'
 
   - script: |
       $(setenvLinux)
       export ADAPTER_LOG=/tmp/adapter.test.log
-      npm run test:adapter
+      cmake --build build --target test_adapter
     displayName: 'Test1'
-    condition: always()
+    condition: variables.runTests
 
   - script: |
       $(setenvLinux)
       export ADAPTER_LOG=/tmp/adapter2.test.log
-      npm run test:adapter2
+      cmake --build build --target test_adapter
     displayName: 'Test2'
-    condition: always()
+    condition: variables.runTests
 
   - script: |
       cat /tmp/adapter.test.log
@@ -94,39 +110,49 @@ jobs:
       buildVersionToDownload: specific
       buildId: $(lldbBuildId)
       downloadType: single
-      artifactName: 'lldb-osx'
+      artifactName: 'lldb'
+      itemPattern: 'lldb/lldb-osx.zip'
+      downloadPath: '$(Agent.WorkFolder)/D'
     displayName: 'Download LLDB'
 
   - script: |
+      unzip $(Agent.WorkFolder)/D/lldb/lldb-osx.zip -d $(Agent.WorkFolder)/D/lldb-osx
       curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly-x86_64-apple-darwin
       npm install
-    displayName: 'Setup'
-
-  # - script: |
-  #     ls -l `which lldb`
-  #     find / -name debugserver
-  #   displayName: 'Info'
+      sudo npm install -g vsce
+    displayName: 'Install'
 
   - script: |
       $(setenvOSX)
-      cp $XCODE_10_DEVELOPER_DIR/../SharedFrameworks/LLDB.framework/Versions/A/Resources/debugserver $LLDB_ROOT/bin
-      chmod +x $LLDB_ROOT/bin/*
-      npm run build
+      mkdir build
+      cd build
+      cmake -DLLDB_ROOT=$(Agent.WorkFolder)/D/lldb-osx ..
+    displayName: 'Configure'
+
+  - script: |
+      $(setenvOSX)
+      cmake --build build --target vsix_full
+      cmake -E copy build/vscode-lldb-full.vsix $(Build.ArtifactStagingDirectory)/vscode-lldb-osx.vsix
     displayName: 'Build'
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: 'vscode-lldb'
 
   - script: |
       $(setenvOSX)
       export ADAPTER_LOG=/tmp/adapter.test.log
-      npm run test:adapter
+      cmake --build build --target test_adapter
     displayName: 'Test1'
-    condition: always()
+    condition: variables.runTests
 
   - script: |
       $(setenvOSX)
       export ADAPTER_LOG=/tmp/adapter2.test.log
-      npm run test:adapter2
+      cmake --build build --target test_adapter2
     displayName: 'Test2'
-    condition: always()
+    condition: variables.runTests
 
   - script: |
       cat /tmp/adapter.test.log
@@ -165,44 +191,89 @@ jobs:
       buildVersionToDownload: specific
       buildId: $(lldbBuildId)
       downloadType: single
-      artifactName: 'lldb-windows'
+      artifactName: 'lldb'
+      itemPattern: 'lldb/lldb-windows.zip'
+      downloadPath: '$(Agent.WorkFolder)/D'
     displayName: 'Download LLDB'
 
   - script: |
+      choco install zip
+      unzip $(Agent.WorkFolder)/D/lldb/lldb-windows.zip -d $(Agent.WorkFolder)/D/lldb-windows
       curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain nightly-x86_64-pc-windows-msvc
-      npm install
-    displayName: 'Setup'
+      set PATH=%USERPROFILE%\.cargo\bin;%PATH%
+      rustup toolchain add nightly-x86_64-pc-windows-gnu
+      curl https://github.com/ninja-build/ninja/releases/download/v1.8.2/ninja-win.zip -o $(Agent.WorkFolder)/D/ninja-win.zip
+      unzip $(Agent.WorkFolder)/D/ninja-win.zip -d %USERPROFILE%\.cargo\bin
+      call npm install
+      call npm install -g vsce
+    displayName: 'Install'
+
+  - task: BatchScript@1
+    inputs:
+      filename: "C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Enterprise\\Common7\\Tools\\VsDevCmd.bat"
+      arguments: -arch=amd64 -host_arch=amd64
+      modifyEnvironment: true
+    displayName: VsDevCmd
 
   - script: |
       $(setenvWindows)
-      npm run build
+      mkdir build
+      cd build
+      cmake -GNinja^
+            -DLLDB_ROOT=$(Agent.WorkFolder)\D\lldb-windows^
+            -DCMAKE_C_COMPILER=cl^
+            -DCMAKE_CXX_COMPILER=cl^
+            ..
+    displayName: 'Configure'
+
+  - script: |
+      $(setenvWindows)
+      cmake --build build --target vsix_full
+      cmake -E copy build/vscode-lldb-full.vsix $(Build.ArtifactStagingDirectory)/vscode-lldb-windows.vsix
     displayName: 'Build'
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: 'vscode-lldb'
 
   - script: |
       $(setenvWindows)
       set ADAPTER_LOG=%TEMP%\adapter.test.log
-      npm run test:adapter
-    displayName: 'Test1'
-    condition: always()
+      cmake --build build --target test_adapter_gnu
+    displayName: 'Test1 GNU'
+    condition: variables.runTests
 
   - script: |
       $(setenvWindows)
       set ADAPTER_LOG=%TEMP%\adapter2.test.log
-      npm run test:adapter2
-    displayName: 'Test2'
-    condition: always()
+      cmake --build build --target test_adapter2_gnu
+    displayName: 'Test2 GNU'
+    condition: variables.runTests
+
+  - script: |
+      $(setenvWindows)
+      set ADAPTER_LOG=%TEMP%\adapter.test.log
+      cmake --build build --target test_adapter_msvc
+    displayName: 'Test1 MSVC'
+    condition: variables.runTests
+
+  - script: |
+      $(setenvWindows)
+      set ADAPTER_LOG=%TEMP%\adapter2.test.log
+      cmake --build build --target test_adapter2_msvc
+    displayName: 'Test2 MSVC'
+    condition: variables.runTests
 
   - script: |
       type %TEMP%\adapter.test.log
       echo ------------------------
       type %TEMP%\adapter2.test.log
       echo - env ------------------
-      set
-      echo - dir -----------------------
-      dir /s $(System.ArtifactsDirectory)
-      echo -----------------------------
       env
-      echo -----------------------------
+      echo - dir -----------------------
       ls -R $(System.ArtifactsDirectory)
+      echo - dir -----------------------
+      ls -R
     displayName: 'On Failure'
     condition: failed()

@@ -10,13 +10,17 @@ logging.basicConfig(level=logging.DEBUG, #filename='/tmp/codelldb.log',
 
 log = logging.getLogger('codelldb')
 
-PY2 = sys.version_info[0] == 2
-if not PY2:
+if sys.version_info[0] > 2:
     basestring = str
     long = int
 
 def to_utf8(s):
     return s.encode('utf8', 'backslashreplace')
+
+sys.modules['debugger'] = sys.modules[__name__]
+
+# import ptvsd
+# ptvsd.attach_server.attach(address=('127.0.0.1', 3000))
 
 #============================================================================================
 
@@ -85,11 +89,29 @@ class PyEvalContext(dict):
 
 #============================================================================================
 
-module_loaded_observers = []
+type_callbacks = { None:[] }
+type_class_mask_union = 0
 
 # observer: Callable[SBModule]
-def register_on_module_loaded(observer):
-    module_loaded_observers.append(observer)
+def register_type_callback(callback, language=None, type_class_mask=lldb.eTypeClassAny):
+    global type_callbacks, type_class_mask_union
+    type_callbacks.setdefault(language, []).append((type_class_mask, callback))
+    type_class_mask_union |= type_class_mask
+
+def analyze_module(sbmodule):
+    global type_callbacks, type_class_mask_union
+    log.info('### analyzing module %s', sbmodule)
+    for cu in sbmodule.compile_units:
+        callbacks = type_callbacks.get(None) + type_callbacks.get(cu.GetLanguage(), [])
+        types = cu.GetTypes(type_class_mask_union)
+        for sbtype in types:
+            type_class = sbtype.GetTypeClass()
+            for type_class_mask, callback in callbacks:
+                if type_class & type_class_mask != 0:
+                    try:
+                        callback(sbtype)
+                    except Exception as err:
+                        log.error('Type callback %s raised %s', callback, err)
 
 ASSIGN_SBMODULE = CFUNCTYPE(None, c_void_p, c_void_p)
 
@@ -101,9 +123,4 @@ def modules_loaded(sbmodule_addrs, assign_sbmodule_addr):
     for addr in sbmodule_addrs:
         sbmodule = lldb.SBModule() # Recreate, because sbmodule.compile_units will cache the list
         assign_sbmodule(long(sbmodule.this), addr)
-        log.info('sbmodule is %s', sbmodule)
-        for observer in module_loaded_observers:
-            try:
-                observer(sbmodule)
-            except Exception as err:
-                log.error('on_module_loaded observer %s raised %s', observer, err)
+        analyze_module(sbmodule)

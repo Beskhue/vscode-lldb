@@ -45,12 +45,18 @@ export async function startDebugAdapter(
     let adapterArgs: string[];
     let adapterExe: string;
     let adapterEnv = config.get('executable_env', {});
-    let paramsBase64 = getAdapterParameters(config, params);
-    adapterArgs = ['-b',
-        '-O', format('command script import \'%s\'', path.join(context.extensionPath, 'adapter')),
-        '-O', format('script adapter.run_tcp_session(0, \'%s\')', paramsBase64)
-    ];
-    adapterExe = config.get('executable', 'lldb');
+    if (!config.get('useCodeLLDB', false)) {
+        let paramsBase64 = getAdapterParameters(config, params);
+        adapterArgs = ['-b',
+            '-O', format('command script import \'%s\'', path.join(context.extensionPath, 'adapter')),
+            '-O', format('script adapter.run_tcp_session(0, \'%s\')', paramsBase64)
+        ];
+        adapterExe = util.getConfigNoDefault(config, 'executable') ||
+            path.join(context.extensionPath, 'lldb/bin/lldb');
+    } else {
+        adapterArgs = ["--lldb=" + path.join(context.extensionPath, 'lldb')];
+        adapterExe = path.join(context.extensionPath, 'adapter2/codelldb');
+    }
     let adapter = spawnDebugger(adapterArgs, adapterExe, adapterEnv);
     let regex = new RegExp('^Listening on port (\\d+)\\s', 'm');
     util.logProcessOutput(adapter, output);

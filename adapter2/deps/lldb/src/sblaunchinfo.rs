@@ -10,7 +10,7 @@ impl SBLaunchInfo {
             return SBLaunchInfo(nullptr);
         })
     }
-    pub fn clear(&self) {
+    pub fn clear(&mut self) {
         cpp!(unsafe [self as "SBLaunchInfo*"] {
             self->Clear();
         })
@@ -20,7 +20,12 @@ impl SBLaunchInfo {
             self->SetListener(*listener);
         })
     }
-    pub fn set_arguments<'a>(&self, args: impl IntoIterator<Item = &'a str>, append: bool) {
+    pub fn listener(&self) -> SBListener {
+        cpp!(unsafe [self as "SBLaunchInfo*"] -> SBListener as "SBListener" {
+            return self->GetListener();
+        })
+    }
+    pub fn set_arguments<'a>(&mut self, args: impl IntoIterator<Item = &'a str>, append: bool) {
         let cstrs: Vec<CString> = args.into_iter().map(|a| CString::new(a).unwrap()).collect();
         let mut ptrs: Vec<*const c_char> = cstrs.iter().map(|cs| cs.as_ptr()).collect();
         ptrs.push(ptr::null());
@@ -29,7 +34,21 @@ impl SBLaunchInfo {
             self->SetArguments(argv, append);
         });
     }
-    pub fn set_environment_entries<'a>(&self, env: impl IntoIterator<Item = &'a str>, append: bool) {
+    pub fn num_arguments(&self) -> u32 {
+        cpp!(unsafe [self as "SBLaunchInfo*"] -> u32 as "uint32_t" {
+            return self->GetNumArguments();
+        })
+    }
+    pub fn argument_at_index(&self, index: u32) -> &str {
+        let ptr = cpp!(unsafe [self as "SBLaunchInfo*", index as "uint32_t"] -> *const c_char as "const char*" {
+            return self->GetArgumentAtIndex(index);
+        });
+        unsafe { CStr::from_ptr(ptr).to_str().unwrap() }
+    }
+    pub fn arguments<'a>(&'a self) -> impl Iterator<Item = &'a str> + 'a {
+        SBIterator::new(self.num_arguments(), move |index| self.argument_at_index(index))
+    }
+    pub fn set_environment_entries<'a>(&mut self, env: impl IntoIterator<Item = &'a str>, append: bool) {
         let cstrs: Vec<CString> = env.into_iter().map(|a| CString::new(a).unwrap()).collect();
         let mut ptrs: Vec<*const c_char> = cstrs.iter().map(|cs| cs.as_ptr()).collect();
         ptrs.push(ptr::null());
@@ -38,12 +57,34 @@ impl SBLaunchInfo {
             self->SetEnvironmentEntries(envp, append);
         });
     }
-    pub fn set_working_directory(&self, cwd: &str) {
+    pub fn num_environment_entries(&self) -> u32 {
+        cpp!(unsafe [self as "SBLaunchInfo*"] -> u32 as "uint32_t" {
+            return self->GetNumEnvironmentEntries();
+        })
+    }
+    pub fn environment_entry_at_index(&self, index: u32) -> &str {
+        let ptr = cpp!(unsafe [self as "SBLaunchInfo*", index as "uint32_t"] -> *const c_char as "const char*" {
+            return self->GetEnvironmentEntryAtIndex(index);
+        });
+        unsafe { CStr::from_ptr(ptr).to_str().unwrap() }
+    }
+    pub fn environment_entries<'a>(&'a self) -> impl Iterator<Item = &'a str> + 'a {
+        SBIterator::new(self.num_environment_entries(), move |index| {
+            self.environment_entry_at_index(index)
+        })
+    }
+    pub fn set_working_directory(&mut self, cwd: &str) {
         with_cstr(cwd, |cwd| {
             cpp!(unsafe [self as "SBLaunchInfo*", cwd as "const char*"] {
                 self->SetWorkingDirectory(cwd);
             });
         })
+    }
+    pub fn working_directory(&self) -> &str {
+        let ptr = cpp!(unsafe [self as "SBLaunchInfo*"] -> *const c_char as "const char*" {
+            return self->GetWorkingDirectory();
+        });
+        unsafe { CStr::from_ptr(ptr).to_str().unwrap() }
     }
     pub fn add_open_file_action(&self, fd: i32, path: &str, read: bool, write: bool) -> bool {
         with_cstr(path, |path| {
@@ -82,6 +123,11 @@ impl SBLaunchInfo {
     pub fn set_executable_file(&self, exe_file: &SBFileSpec, add_as_first_arg: bool) {
         cpp!(unsafe [self as "SBLaunchInfo*", exe_file as "SBFileSpec*", add_as_first_arg as "bool"] {
             return self->SetExecutableFile(*exe_file, add_as_first_arg);
+        })
+    }
+    pub fn executable_file(&self) -> SBFileSpec {
+        cpp!(unsafe [self as "SBLaunchInfo*"] -> SBFileSpec as "SBFileSpec"{
+            return self->GetExecutableFile();
         })
     }
 }

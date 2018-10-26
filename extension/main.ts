@@ -14,6 +14,7 @@ import * as htmlView from './htmlView';
 import * as cargo from './cargo';
 import * as util from './util';
 import { Dict } from './util';
+import * as install from './install';
 
 export let output = window.createOutputChannel('LLDB');
 
@@ -53,6 +54,19 @@ class Extension implements DebugConfigurationProvider {
         this.registerDisplaySettingCommand('lldb.toggleContainerSummary', async (settings) => {
             settings.containerSummary = !settings.containerSummary;
         });
+
+        subscriptions.push(commands.registerCommand('lldb.test', () => this.test()));
+    }
+
+    registerDisplaySettingCommand(command: string, updater: (settings: DisplaySettings) => Promise<void>) {
+        this.context.subscriptions.push(commands.registerCommand(command, async () => {
+            if (debug.activeDebugSession && debug.activeDebugSession.type == 'lldb') {
+                let settings = this.context.globalState.get<DisplaySettings>('display_settings') || new DisplaySettings();
+                await updater(settings);
+                this.context.globalState.update('display_settings', settings);
+                await debug.activeDebugSession.customRequest('displaySettings', settings);
+            }
+        }));
     }
 
     registerDisplaySettingCommand(command: string, updater: (settings: DisplaySettings) => Promise<void>) {
@@ -203,6 +217,19 @@ class Extension implements DebugConfigurationProvider {
         } else {
             throw Error('Cancelled');
         }
+    }
+};
+
+    async test() {
+        let url = "https://github.com/vadimcn/vscode-lldb/releases/download/v20181115.6/vscode-lldb-linux.vsix";
+        let file = path.join(os.tmpdir(), 'vscode-lldb.vsix');
+        // try {
+        //     await install.download(url, file);
+        // } catch (err) {
+        //     window.showErrorMessage('Could not download native dependencies');
+        //     return;
+        // }
+        install.installVsix(file, this.context);
     }
 };
 

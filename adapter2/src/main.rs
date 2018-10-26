@@ -11,31 +11,26 @@ fn main() -> Result<(), std::io::Error> {
     env_logger::Builder::from_default_env().init();
 
     let matches = App::new("codelldb")
-        .arg(
-            Arg::with_name("liblldb")
-                .long("liblldb")
-                .takes_value(true)
-                .required(true),
-        )
+        .arg(Arg::with_name("lldb").long("lldb").takes_value(true).required(true))
         .arg(Arg::with_name("port").long("port").takes_value(true))
         .arg(Arg::with_name("multi-session").long("multi-session"))
         .get_matches();
 
-    let liblldb_path = matches.value_of("liblldb").unwrap();
     let multi_session = matches.is_present("multi-session");
     let port = matches.value_of("port").map(|s| s.parse().unwrap()).unwrap_or(0);
+    let mut liblldb_path: path::PathBuf = matches.value_of("lldb").unwrap().into();
+
+    if liblldb_path.is_dir() {
+        if cfg!(windows) {
+            liblldb_path.push("bin/liblldb.dll");
+        } else if cfg!(target_os = "macos") {
+            liblldb_path.push("lib/liblldb.dylib");
+        } else {
+            liblldb_path.push("lib/liblldb.so");
+        }
+    }
 
     unsafe {
-        let mut liblldb_path: path::PathBuf = liblldb_path.into();
-        if liblldb_path.is_dir() {
-            if cfg!(windows) {
-                liblldb_path.push("liblldb.dll");
-            } else if cfg!(target_os = "macos") {
-                liblldb_path.push("liblldb.dylib");
-            } else {
-                liblldb_path.push("liblldb.so");
-            }
-        }
         load_library(&liblldb_path, true);
 
         let mut codelldb_path = env::current_exe()?;
@@ -101,7 +96,7 @@ mod loading {
 #[cfg(windows)]
 mod loading {
     use std::ffi::CString;
-    use std::os::raw::{c_char, c_int, c_void};
+    use std::os::raw::{c_char, c_void};
     use std::path::Path;
 
     #[link(name = "kernel32")]

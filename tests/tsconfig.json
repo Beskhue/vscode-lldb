@@ -1,13 +1,12 @@
 {
 	"compilerOptions": {
-        "target": "es2016",
-        "module": "commonjs",
-        "moduleResolution": "node",
+		"target": "es2016",
+		"module": "commonjs",
+		"moduleResolution": "node",
 		"alwaysStrict": true,
 		"noImplicitAny": true,
 		"removeComments": false,
 		"preserveConstEnums": true,
-		"sourceMap": true,
-		"composite": true
+		"sourceMap": true
 	}
 }

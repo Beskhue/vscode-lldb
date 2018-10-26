@@ -3,8 +3,7 @@ import logging
 import re
 import lldb
 
-PY2 = sys.version_info[0] == 2
-if PY2:
+if sys.version_info[0] == 2:
     # python2-based LLDB accepts utf8-encoded ascii strings only.
     to_lldb_str = lambda s: s.encode('utf8', 'backslashreplace') if isinstance(s, unicode) else s
     xrange = xrange
@@ -26,8 +25,10 @@ def initialize_category(debugger):
     rust_category.SetEnabled(True)
 
     #attach_summary_to_type(get_array_summary, r'^.*\[[0-9]+\]$', True)
+    attach_summary_to_type(get_tuple_summary, r'^\(.*\)$', True)
 
     attach_synthetic_to_type(StrSliceSynthProvider, '&str')
+    attach_synthetic_to_type(StrSliceSynthProvider, 'str*')
 
     attach_synthetic_to_type(StdStringSynthProvider, 'collections::string::String')
     attach_synthetic_to_type(StdStringSynthProvider, 'alloc::string::String')
@@ -48,24 +49,14 @@ def initialize_category(debugger):
 
     attach_synthetic_to_type(StdRcSynthProvider, r'^alloc::rc::Rc<.+>$', True)
     attach_synthetic_to_type(StdRcSynthProvider, r'^alloc::rc::Weak<.+>$', True)
-    attach_synthetic_to_type(StdArcSynthProvider, r'^alloc::sync::Arc<.+>$', True)
-    attach_synthetic_to_type(StdArcSynthProvider, r'^alloc::sync::Weak<.+>$', True)
+    attach_synthetic_to_type(StdArcSynthProvider, r'^alloc::(sync|arc)::Arc<.+>$', True)
+    attach_synthetic_to_type(StdArcSynthProvider, r'^alloc::(sync|arc)::Weak<.+>$', True)
     attach_synthetic_to_type(StdMutexSynthProvider, r'^std::sync::mutex::Mutex<.+>$', True)
 
     attach_synthetic_to_type(StdCellSynthProvider, r'^core::cell::Cell<.+>$', True)
     attach_synthetic_to_type(StdRefCellSynthProvider, r'^core::cell::RefCell<.+>$', True)
     attach_synthetic_to_type(StdRefCellBorrowSynthProvider, r'^core::cell::Ref<.+>$', True)
     attach_synthetic_to_type(StdRefCellBorrowSynthProvider, r'^core::cell::RefMut<.+>$', True)
-
-def analyze_module(sbmodule):
-    log.info('### analyzing module %s', sbmodule)
-    for cu in sbmodule.compile_units:
-        if cu.GetLanguage() == lldb.eLanguageTypeRust:
-            log.info('### analyzing unit %s', cu.file)
-            types = cu.GetTypes(lldb.eTypeClassUnion | lldb.eTypeClassStruct)
-            for ty in types:
-                #log.info('### analyzing type %s (%s)', ty.GetName(), ty.GetDisplayTypeName())
-                analyze_type(ty)
 
 # Enums and tuples cannot be recognized based on type name.
 # These require deeper runtime analysis to tease them apart.
@@ -91,12 +82,11 @@ def analyze_type(obj_type):
         first_field_name = obj_type.GetFieldAtIndex(0).GetName()
         if first_field_name == ENUM_DISCRIMINANT: # Enum variant
             attach_summary_to_type(get_enum_variant_summary, obj_type.GetDisplayTypeName())
-        elif first_field_name == '__0': # Tuple variant or tuple struct
+        elif first_field_name in ['0', '__0']: # Tuple variant or tuple struct
             attach_summary_to_type(get_tuple_summary, obj_type.GetDisplayTypeName())
 
 def attach_synthetic_to_type(synth_class, type_name, is_regex=False):
-    global rust_category
-    global module
+    global module, rust_category
     log.debug('attaching synthetic %s to "%s", is_regex=%s', synth_class.__name__, type_name, is_regex)
     synth = lldb.SBTypeSynthetic.CreateWithClassName(__name__ + '.' + synth_class.__name__)
     synth.SetOptions(lldb.eTypeOptionCascade)
@@ -129,6 +119,14 @@ def gcm(valobj, *chain):
     for name in chain:
         valobj = valobj.GetChildMemberWithName(name)
     return valobj
+
+# Rust-enabled LLDB using DWARF debug info will strip tuple field prefixes.
+# If LLDB is not Rust-enalbed or if using PDB debug info, they will be underscore-prefixed.
+def get_first_tuple_field(valobj):
+    child = valobj.GetChildMemberWithName('0')
+    if not child.IsValid():
+        child = valobj.GetChildMemberWithName('__0')
+    return child
 
 def string_from_ptr(pointer, length):
     if length <= 0:
@@ -354,7 +352,7 @@ class ArrayLikeSynthProvider(RustSynthProvider):
 class StdVectorSynthProvider(ArrayLikeSynthProvider):
     def ptr_and_len(self, vec):
         return (
-            gcm(vec, 'buf', 'ptr', 'pointer', '__0'),
+            get_first_tuple_field(gcm(vec, 'buf', 'ptr', 'pointer')),
             gcm(vec, 'len').GetValueAsUnsigned()
         )
     def get_summary(self):
@@ -397,7 +395,7 @@ class StdStringSynthProvider(StringLikeSynthProvider):
     def ptr_and_len(self, valobj):
         vec = gcm(valobj, 'vec')
         return (
-            gcm(vec, 'buf', 'ptr', 'pointer', '__0'),
+            get_first_tuple_field(gcm(vec, 'buf', 'ptr', 'pointer')),
             gcm(vec, 'len').GetValueAsUnsigned()
         )
 
@@ -416,7 +414,7 @@ class StdOsStringSynthProvider(StringLikeSynthProvider):
         if tmp.IsValid():
             vec = tmp
         return (
-            gcm(vec, 'buf', 'ptr', 'pointer', '__0'),
+            get_first_tuple_field(gcm(vec, 'buf', 'ptr', 'pointer')),
             gcm(vec, 'len').GetValueAsUnsigned()
         )
 
@@ -480,7 +478,7 @@ class StdRefCountedSynthProvider(DerefSynthProvider):
 
 class StdRcSynthProvider(StdRefCountedSynthProvider):
     def initialize(self):
-        inner = gcm(self.valobj, 'ptr', 'pointer', '__0')
+        inner = get_first_tuple_field(gcm(self.valobj, 'ptr', 'pointer'))
         self.strong = gcm(inner, 'strong', 'value', 'value').GetValueAsUnsigned()
         self.weak = gcm(inner, 'weak', 'value', 'value').GetValueAsUnsigned()
         if self.strong > 0:
@@ -491,7 +489,7 @@ class StdRcSynthProvider(StdRefCountedSynthProvider):
 
 class StdArcSynthProvider(StdRefCountedSynthProvider):
     def initialize(self):
-        inner = gcm(self.valobj, 'ptr', 'pointer', '__0')
+        inner = get_first_tuple_field(gcm(self.valobj, 'ptr', 'pointer'))
         self.strong = gcm(inner, 'strong', 'v', 'value').GetValueAsUnsigned()
         self.weak = gcm(inner, 'weak', 'v', 'value').GetValueAsUnsigned()
         if self.strong > 0:
@@ -528,10 +526,12 @@ class StdRefCellBorrowSynthProvider(DerefSynthProvider):
 ##################################################################################################################
 
 def __lldb_init_module(debugger_obj, internal_dict):
+    # else:
+    #     try:
+    #         import debugger
+    #         debugger.register_type_callback(analyze_type, lldb.eLanguageTypeRust, lldb.eTypeClassUnion | lldb.eTypeClassStruct)
+    #     except Exception as err:
+    #         log.error('### %s', err)
+
     initialize_category(debugger_obj)
 
-    try:
-        import debugger
-        debugger.register_type_callback(analyze_type, lldb.eLanguageTypeRust, lldb.eTypeClassUnion | lldb.eTypeClassStruct)
-    except Exception:
-        log.error('### %s', err)
