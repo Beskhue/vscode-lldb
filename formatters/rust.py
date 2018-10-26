@@ -1,29 +1,31 @@
-import logging
-import lldb
-import codecs
-import re
 import sys
-from .. import xrange, to_lldb_str
+import logging
+import re
+import lldb
+
+PY2 = sys.version_info[0] == 2
+if PY2:
+    # python2-based LLDB accepts utf8-encoded ascii strings only.
+    to_lldb_str = lambda s: s.encode('utf8', 'backslashreplace') if isinstance(s, unicode) else s
+    xrange = xrange
+else:
+    to_lldb_str = str
+    xrange = range
 
 log = logging.getLogger('rust')
 
-rust_category = None
-analyze_value = None
 module = sys.modules[__name__]
 serial = 0
 
-def initialize(debugger, analyze):
-    log.info('initialize')
-    global rust_category
-    global analyze_value
-    analyze_value = analyze
+def initialize_category(debugger):
+    global module
+    log.info('Initializing, module name=%s', __name__)
 
-    debugger.HandleCommand('script import adapter.formatters.rust')
-    rust_category = debugger.CreateCategory('Rust')
+    module.rust_category = debugger.CreateCategory('Rust')
     #rust_category.AddLanguage(lldb.eLanguageTypeRust)
     rust_category.SetEnabled(True)
 
-    attach_summary_to_type(get_array_summary, r'^.*\[[0-9]+\]$', True)
+    #attach_summary_to_type(get_array_summary, r'^.*\[[0-9]+\]$', True)
 
     attach_synthetic_to_type(StrSliceSynthProvider, '&str')
 
@@ -55,47 +57,48 @@ def initialize(debugger, analyze):
     attach_synthetic_to_type(StdRefCellBorrowSynthProvider, r'^core::cell::Ref<.+>$', True)
     attach_synthetic_to_type(StdRefCellBorrowSynthProvider, r'^core::cell::RefMut<.+>$', True)
 
+def analyze_module(sbmodule):
+    log.info('### analyzing module %s', sbmodule)
+    for cu in sbmodule.compile_units:
+        if cu.GetLanguage() == lldb.eLanguageTypeRust:
+            log.info('### analyzing unit %s', cu.file)
+            types = cu.GetTypes(lldb.eTypeClassUnion | lldb.eTypeClassStruct)
+            for ty in types:
+                #log.info('### analyzing type %s (%s)', ty.GetName(), ty.GetDisplayTypeName())
+                analyze_type(ty)
+
 # Enums and tuples cannot be recognized based on type name.
 # These require deeper runtime analysis to tease them apart.
 ENUM_DISCRIMINANT = 'RUST$ENUM$DISR'
 ENCODED_ENUM_PREFIX = 'RUST$ENCODED$ENUM$'
 
-def analyze(sbvalue):
-    #log.info('rust.analyze for "%s" typeclass=0x%X', sbvalue.GetType().GetName(), sbvalue.GetType().GetTypeClass())
-    if sbvalue.IsSynthetic():
+def analyze_type(obj_type):
+    num_fields = obj_type.GetNumberOfFields()
+    if num_fields == 0:
         return
-    obj_type = sbvalue.GetType()
     type_class = obj_type.GetTypeClass()
-
-    if type_class & (lldb.eTypeClassPointer | lldb.eTypeClassReference) != 0:
-        obj_type = obj_type.GetDereferencedType()
-        type_class = obj_type.GetTypeClass()
-
     if type_class == lldb.eTypeClassUnion:
-        num_fields = obj_type.GetNumberOfFields()
         if num_fields == 1:
             first_variant_name = obj_type.GetFieldAtIndex(0).GetName()
-            if first_variant_name is None:
-                # Singleton
-                attach_summary_to_type(get_singleton_enum_summary, obj_type.GetName())
-            else:
-                assert first_variant_name.startswith(ENCODED_ENUM_PREFIX)
+            if first_variant_name is None: # Singleton
+                attach_summary_to_type(get_singleton_enum_summary, obj_type.GetDisplayTypeName())
+            elif first_variant_name.startswith(ENCODED_ENUM_PREFIX): # Zero-optimized enum
                 provider_class = make_encoded_enum_provider_class(first_variant_name)
-                attach_synthetic_to_type(provider_class, obj_type.GetName())
-        else:
-            attach_synthetic_to_type(RegularEnumProvider, obj_type.GetName())
+                attach_synthetic_to_type(provider_class, obj_type.GetDisplayTypeName())
+        else: # Regular enum
+            attach_synthetic_to_type(RegularEnumProvider, obj_type.GetDisplayTypeName())
     elif type_class == lldb.eTypeClassStruct:
         first_field_name = obj_type.GetFieldAtIndex(0).GetName()
-        if first_field_name == ENUM_DISCRIMINANT:
-            attach_summary_to_type(get_enum_variant_summary, obj_type.GetName())
-        elif first_field_name == '__0':
-            attach_summary_to_type(get_tuple_summary, obj_type.GetName())
+        if first_field_name == ENUM_DISCRIMINANT: # Enum variant
+            attach_summary_to_type(get_enum_variant_summary, obj_type.GetDisplayTypeName())
+        elif first_field_name == '__0': # Tuple variant or tuple struct
+            attach_summary_to_type(get_tuple_summary, obj_type.GetDisplayTypeName())
 
 def attach_synthetic_to_type(synth_class, type_name, is_regex=False):
     global rust_category
     global module
     log.debug('attaching synthetic %s to "%s", is_regex=%s', synth_class.__name__, type_name, is_regex)
-    synth = lldb.SBTypeSynthetic.CreateWithClassName('adapter.formatters.rust.' + synth_class.__name__)
+    synth = lldb.SBTypeSynthetic.CreateWithClassName(__name__ + '.' + synth_class.__name__)
     synth.SetOptions(lldb.eTypeOptionCascade)
     rust_category.AddTypeSynthetic(lldb.SBTypeNameSpecifier(type_name, is_regex), synth)
 
@@ -108,7 +111,7 @@ def attach_synthetic_to_type(synth_class, type_name, is_regex=False):
 def attach_summary_to_type(summary_fn, type_name, is_regex=False):
     global rust_category
     log.debug('attaching summary %s to "%s", is_regex=%s', summary_fn.__name__, type_name, is_regex)
-    summary = lldb.SBTypeSummary.CreateWithFunctionName('adapter.formatters.rust.' + summary_fn.__name__)
+    summary = lldb.SBTypeSummary.CreateWithFunctionName(__name__ + '.' + summary_fn.__name__)
     summary.SetOptions(lldb.eTypeOptionCascade)
     rust_category.AddTypeSummary(lldb.SBTypeNameSpecifier(type_name, is_regex), summary)
 
@@ -136,10 +139,9 @@ def string_from_ptr(pointer, length):
     if error.Success():
         return data.decode('utf8', 'replace')
     else:
-        log.error('%s', error.GetCString())
+        log.error('ReadMemory error: %s', error.GetCString())
 
 def get_obj_summary(valobj, unavailable='{...}'):
-    analyze_value(valobj)
     summary = valobj.GetSummary()
     if summary is not None:
         return summary
@@ -422,14 +424,13 @@ class FFISliceSynthProvider(StringLikeSynthProvider):
     def ptr_and_len(self, valobj):
         process = valobj.GetProcess()
         slice_ptr = valobj.GetLoadAddress()
-        data_ptr_type = valobj.GetType().GetBasicType(lldb.eBasicTypeChar).GetPointerType()
+        data_ptr_type = valobj.GetTarget().GetBasicType(lldb.eBasicTypeChar).GetPointerType()
         # Unsized slice objects have incomplete debug info, so here we just assume standard slice
         # reference layout: [<pointer to data>, <data size>]
         error = lldb.SBError()
-        return (
-            valobj.CreateValueFromAddress('data', slice_ptr, data_ptr_type),
-            process.ReadPointerFromMemory(slice_ptr + process.GetAddressByteSize(), error)
-        )
+        pointer = valobj.CreateValueFromAddress('data', slice_ptr, data_ptr_type)
+        length = process.ReadPointerFromMemory(slice_ptr + process.GetAddressByteSize(), error)
+        return pointer, length
 
 class StdCStrSynthProvider(FFISliceSynthProvider):
     def ptr_and_len(self, valobj):
@@ -523,3 +524,14 @@ class StdRefCellSynthProvider(DerefSynthProvider):
 class StdRefCellBorrowSynthProvider(DerefSynthProvider):
     def initialize(self):
         self.deref = gcm(self.valobj, 'value').Dereference()
+
+##################################################################################################################
+
+def __lldb_init_module(debugger_obj, internal_dict):
+    initialize_category(debugger_obj)
+
+    try:
+        import debugger
+        debugger.register_type_callback(analyze_type, lldb.eLanguageTypeRust, lldb.eTypeClassUnion | lldb.eTypeClassStruct)
+    except Exception:
+        log.error('### %s', err)
