@@ -145,6 +145,8 @@ suite('Adapter tests', () => {
         });
 
         test('variables', async function () {
+            if (triple.endsWith('pc-windows-msvc')) this.skip();
+
             let ds = await DebugTestSession.start(adapterLog);
             let bpLine = findMarker(debuggeeSource, '#BP3');
             let setBreakpointAsync = ds.setBreakpoint(debuggeeSource, bpLine);
@@ -203,6 +205,8 @@ suite('Adapter tests', () => {
         });
 
         test('expressions', async function () {
+            if (triple.endsWith('pc-windows-msvc')) this.skip();
+
             let ds = await DebugTestSession.start(adapterLog);
             let bpLine = findMarker(debuggeeSource, '#BP3');
             let setBreakpointAsync = ds.setBreakpoint(debuggeeSource, bpLine);
@@ -241,6 +245,8 @@ suite('Adapter tests', () => {
         });
 
         test('conditional breakpoint 1', async function () {
+            if (triple.endsWith('pc-windows-msvc')) this.skip();
+
             let ds = await DebugTestSession.start(adapterLog);
             let bpLine = findMarker(debuggeeSource, '#BP3');
             let setBreakpointAsync = ds.setBreakpoint(debuggeeSource, bpLine, "i == 5");
@@ -253,6 +259,8 @@ suite('Adapter tests', () => {
         });
 
         test('conditional breakpoint 2', async function () {
+            if (triple.endsWith('pc-windows-msvc')) this.skip();
+
             let ds = await DebugTestSession.start(adapterLog);
             let bpLine = findMarker(debuggeeSource, '#BP3');
             let setBreakpointAsync = ds.setBreakpoint(debuggeeSource, bpLine, "/py $i == 5");
@@ -265,6 +273,8 @@ suite('Adapter tests', () => {
         });
 
         test('disassembly', async function () {
+            if (triple.endsWith('pc-windows-msvc')) this.skip();
+
             let ds = await DebugTestSession.start(adapterLog);
             let setBreakpointAsync = ds.setFnBreakpoint('/re disassembly1');
             let stoppedEvent = await ds.launchAndWaitForStop({ name: 'disassembly', program: debuggee, args: ['dasm'] });
@@ -354,6 +364,8 @@ suite('Adapter tests', () => {
 
     suite('Rust tests', () => {
         test('variables', async function () {
+            if (triple.endsWith('pc-windows-msvc')) this.skip();
+
             let ds = await DebugTestSession.start(adapterLog);
             let bpLine = findMarker(rusttypesSource, '#BP1');
             let setBreakpointAsync = ds.setBreakpoint(rusttypesSource, bpLine);
