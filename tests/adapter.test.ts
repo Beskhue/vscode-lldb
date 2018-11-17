@@ -297,24 +297,30 @@ suite('Adapter tests', () => {
     suite('Attach tests', () => {
         // Many Linux systems restrict tracing to parent processes only, which lldb in this case isn't.
         // To allow unrestricted tracing run `echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope`.
+        let ptraceLocked = false;
         if (process.platform == 'linux') {
             if (parseInt(fs.readFileSync('/proc/sys/kernel/yama/ptrace_scope', 'ascii')) > 0) {
-                console.log('ptrace() syscall is locked down: skipping attach tests');
-                return;
+                ptraceLocked = true;
             }
         }
 
         let debuggeeProc: cp.ChildProcess;
 
         suiteSetup(() => {
-            debuggeeProc = cp.spawn(debuggee, ['inf_loop'], {});
+            if (ptraceLocked)
+                console.log('ptrace() syscall is locked down: skipping attach tests');
+            else
+                debuggeeProc = cp.spawn(debuggee, ['inf_loop'], {});
         })
 
         suiteTeardown(() => {
-            debuggeeProc.kill()
+            if (debuggeeProc)
+                debuggeeProc.kill()
         })
 
         test('attach by pid', async function () {
+            if (ptraceLocked) this.skip();
+
             let ds = await DebugTestSession.start(adapterLog);
             let asyncWaitStopped = ds.waitForStopEvent();
             let attachResp = await ds.attach({ program: debuggee, pid: debuggeeProc.pid, stopOnEntry: true });
@@ -324,6 +330,8 @@ suite('Adapter tests', () => {
         });
 
         test('attach by name', async function () {
+            if (ptraceLocked) this.skip();
+
             let ds = await DebugTestSession.start(adapterLog);
             let asyncWaitStopped = ds.waitForStopEvent();
             let attachResp = await ds.attach({ program: debuggee, stopOnEntry: true });
