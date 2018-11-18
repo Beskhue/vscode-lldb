@@ -1,8 +1,3 @@
-add_custom_target(cargo_build
-    COMMAND ${CMAKE_COMMAND} -E env LLDB_ROOT=${LLDB_ROOT} cargo build
-    COMMENT "Running cargo build"
-)
-
 if (${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Linux")
     add_copy_files(codelldb_bin
         DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
@@ -30,6 +25,7 @@ elseif (${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Windows")
         DESTINATION ${CMAKE_CURRENT_BINARY_DIR}
         FILES ${CMAKE_SOURCE_DIR}/target/debug/codelldb.dll
     )
+    set(Target --target=x86_64-pc-windows-msvc)
 else()
     message(FATAL_ERROR "${CMAKE_HOST_SYSTEM_NAME} not supported." )
 endif()
@@ -39,6 +35,11 @@ add_copy_files(codelldb_python
     FILES ${CMAKE_SOURCE_DIR}/adapter2/codelldb.py
           ${CMAKE_SOURCE_DIR}/adapter2/value.py
           ${CMAKE_SOURCE_DIR}/formatters/rust.py
+)
+
+add_custom_target(cargo_build
+    COMMAND ${CMAKE_COMMAND} -E env LLDB_ROOT=${LLDB_ROOT} cargo build ${Target}
+    COMMENT "Running cargo build"
 )
 
 add_dependencies(codelldb_bin cargo_build)

@@ -12,7 +12,7 @@ import { WritableStream } from 'memory-streams';
 import * as util from '../extension/util';
 
 const triple = process.env.TARGET_TRIPLE;
-const useCodeLLDB = !!process.env.USE_CODELLDB;
+const useAdapter2 = !!process.env.USE_ADAPTER2;
 
 const sourceDir = process.cwd();
 
@@ -156,7 +156,7 @@ suite('Adapter tests', () => {
             let localsRef = await ds.getFrameLocalsRef(frameId);
 
             let invalid_utf8 = '"ABC\uFFFD\\x01\uFFFDXYZ';
-            if (/windows/.test(triple) && !useCodeLLDB)
+            if (/windows/.test(triple) && !useAdapter2)
                 invalid_utf8 = '"ABC\uDCFF\\x01\uDCFEXYZ';
 
             await ds.compareVariables(localsRef, {
@@ -472,7 +472,7 @@ class DebugTestSession extends DebugClient {
         if (process.env.DEBUG_SERVER) {
             session.port = parseInt(process.env.DEBUG_SERVER)
         } else {
-            if (useCodeLLDB) {
+            if (useAdapter2) {
                 let codelldb = path.join(extensionRoot, 'adapter2/codelldb');
                 log('Launching adapter: %s', codelldb);
                 session.adapter = cp.spawn(codelldb, ['--lldb=lldb'], {
@@ -702,11 +702,11 @@ function dumpLogs() {
     console.error('------------------')
 }
 
-process.on('uncaughtException', (err) => {
-    console.error('### uncaughtException');
-    dumpLogs();
-});
-process.on('unhandledRejection', (err) => {
-    console.error('### unhandledRejection');
-    dumpLogs();
-});
+// process.on('uncaughtException', (err) => {
+//     console.error('### uncaughtException');
+//     dumpLogs();
+// });
+// process.on('unhandledRejection', (err) => {
+//     console.error('### unhandledRejection');
+//     dumpLogs();
+// });

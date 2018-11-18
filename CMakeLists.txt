@@ -165,7 +165,7 @@ if (${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Windows")
     )
     add_custom_target(test_adapter2_gnu
         DEPENDS debuggee codelldb tests
-        COMMAND ${CMAKE_COMMAND} -E env USE_CODELLDB=1 TARGET_TRIPLE=x86_64-pc-windows-gnu ${MochaCommand}
+        COMMAND ${CMAKE_COMMAND} -E env USE_ADAPTER2=1 TARGET_TRIPLE=x86_64-pc-windows-gnu ${MochaCommand}
         USES_TERMINAL WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     )
     add_custom_target(test_adapter_msvc
@@ -175,7 +175,7 @@ if (${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Windows")
     )
     add_custom_target(test_adapter2_msvc
         DEPENDS debuggee codelldb tests
-        COMMAND ${CMAKE_COMMAND} -E env USE_CODELLDB=1 TARGET_TRIPLE=x86_64-pc-windows-msvc ${MochaCommand}
+        COMMAND ${CMAKE_COMMAND} -E env USE_ADAPTER2=1 TARGET_TRIPLE=x86_64-pc-windows-msvc ${MochaCommand}
         USES_TERMINAL WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     )
     add_custom_target(test_adapter
@@ -191,7 +191,7 @@ else()
     )
     add_custom_target(test_adapter2
         DEPENDS debuggee codelldb tests
-        COMMAND ${CMAKE_COMMAND} -E env USE_CODELLDB=1 TARGET_TRIPLE=x86_64-unknown-linux-gnu ${MochaCommand}
+        COMMAND ${CMAKE_COMMAND} -E env USE_ADAPTER2=1 TARGET_TRIPLE=x86_64-unknown-linux-gnu ${MochaCommand}
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         USES_TERMINAL WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     )

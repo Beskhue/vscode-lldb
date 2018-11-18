@@ -45,7 +45,7 @@ export async function startDebugAdapter(
     let adapterArgs: string[];
     let adapterExe: string;
     let adapterEnv = config.get('executable_env', {});
-    if (!config.get('useCodeLLDB', false)) {
+    if (!config.get('useAdapter2', false)) {
         let paramsBase64 = getAdapterParameters(config, params);
         adapterArgs = ['-b',
             '-O', format('command script import \'%s\'', path.join(context.extensionPath, 'adapter')),

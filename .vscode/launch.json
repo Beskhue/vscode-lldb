@@ -76,7 +76,7 @@
 			"stopAtEntry": false,
 			"cwd": "${workspaceFolder}",
 			"environment": [
-				{ "name": "PATH", "value":"${env:PATH};C:\\Python36-64;C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\BuildTools\\DIA SDK\\bin\\amd64" },
+				{ "name": "PATH", "value":"${env:PATH};C:\\Python36-64" },
 				{ "name":"RUST_LOG", "value":"error,codelldb=debug"},
 				{ "name":"RUST_LOG_STYLE", "value":"always"},
 				{ "name":"RUST_BACKTRACE", "value":"full"},
@@ -129,7 +129,7 @@
 				"build/tests/tests"
 			],
 			"env": {
-				//"USE_CODELLDB": "1",
+				//"USE_ADAPTER2": "1",
 				"TARGET_TRIPLE": "x86_64-pc-windows-gnu",
 				"RUST_LOG": "error,codelldb=debug",
 				"RUST_BACKTRACE": "full"
