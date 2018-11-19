@@ -65,10 +65,23 @@ add_custom_target(strip
 
 # VSIX package
 
-add_copy_directory(node_modules
-    ${CMAKE_SOURCE_DIR}/node_modules
-    DESTINATION  ${CMAKE_BINARY_DIR}/node_modules
+add_copy_directory(node_modules1
+    ${CMAKE_SOURCE_DIR}/node_modules/yauzl
+    DESTINATION  ${CMAKE_BINARY_DIR}/node_modules/yauzl
 )
+add_copy_directory(node_modules2
+    ${CMAKE_SOURCE_DIR}/node_modules/buffer-crc32
+    DESTINATION  ${CMAKE_BINARY_DIR}/node_modules/buffer-crc32
+)
+add_copy_directory(node_modules3
+    ${CMAKE_SOURCE_DIR}/node_modules/fd-slicer
+    DESTINATION  ${CMAKE_BINARY_DIR}/node_modules/fd-slicer
+)
+add_copy_directory(node_modules4
+    ${CMAKE_SOURCE_DIR}/node_modules/pend
+    DESTINATION  ${CMAKE_BINARY_DIR}/node_modules/pend
+)
+add_custom_target(node_modules DEPENDS node_modules1 node_modules2 node_modules3 node_modules4)
 
 set(PackagedFilesPortable
     README.md
