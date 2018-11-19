@@ -4,7 +4,9 @@
   "type": "shell",
   "command": "cmake",
   "args": [
-    "--build", "build", "--target"
+    "--build",
+    "build",
+    "--target"
   ],
   "tasks": [
     {
@@ -29,7 +31,7 @@
       "group": "build"
     },
     {
-      "label": "check",
+      "label": "cargo check",
       "command": "cargo",
       "args": [
         "check"
@@ -37,6 +39,20 @@
       "problemMatcher": [
         "$rustc"
       ],
+      "group": "build"
+    },
+    {
+      "label": "cargo test",
+      "command": "cargo",
+      "args": [
+        "test",
+        "--package=codelldb"
+      ],
+      "options": {
+        "env": {
+          "PATH": "${env:PATH};${workspaceFolder}/build/lldb/bin"
+        }
+      },
       "group": "build"
     },
     {

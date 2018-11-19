@@ -75,7 +75,7 @@ pub fn normalize_path(path: impl AsRef<Path>) -> PathBuf {
             }
         }
     }
-    normalized.to_str().unwrap().into()
+    normalized
 }
 
 #[test]
@@ -84,6 +84,7 @@ fn test_normalize_path() {
     assert_eq!(normalize_path("foo/bar"), Path::new("foo/bar"));
     assert_eq!(normalize_path("/foo/bar/./baz/./../"), Path::new("/foo/bar"));
     assert_eq!(normalize_path(r"c:\foo\bar/./baz/./../"), Path::new(r"c:\foo\bar"));
+    assert_eq!(normalize_path(r"C:/FOO\bar.baz"), Path::new(r"c:\FOO/bar.baz"));
 }
 
 #[test]

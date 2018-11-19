@@ -104,7 +104,7 @@ pub struct DebugSession {
     disassembly: MustInitialize<disassembly::AddressSpace>,
     known_threads: HashSet<ThreadID>,
     source_map: source_map::SourceMap,
-    source_map_cache: RefCell<HashMap<(Cow<'static, str>, Cow<'static, str>), Option<Rc<String>>>>,
+    source_map_cache: RefCell<HashMap<(Cow<'static, str>, Cow<'static, str>), Option<Rc<PathBuf>>>>,
     loaded_modules: Vec<SBModule>,
     exit_commands: Option<Vec<String>>,
     terminal: Option<Terminal>,
@@ -741,7 +741,7 @@ impl DebugSession {
             BreakpointKind::Source { file_path, .. } => {
                 if let Some(le) = bp_loc.address().line_entry() {
                     if let Some(local_path) = self.map_filespec_to_local(&le.file_spec()) {
-                        &local_path[..] == file_path
+                        local_path.deref() == file_path
                     } else {
                         false
                     }
@@ -1943,10 +1943,10 @@ impl DebugSession {
             // Running scripts during target execution seems to trigger a bug in LLDB,
             // so we defer loaded module notification till the next stop.
             for module in event.modules() {
-                let mut message = format!("Module loaded: {}", module.filespec().path());
+                let mut message = format!("Module loaded: {}.", module.filespec().path());
                 let symbols = module.symbol_filespec();
                 if symbols.is_valid() {
-                    message.push_str(" (has symbols)");
+                    message.push_str(" Symbols loaded.");
                 }
                 self.console_message(message);
 
@@ -2006,7 +2006,7 @@ impl DebugSession {
         }
     }
 
-    fn map_filespec_to_local(&self, filespec: &SBFileSpec) -> Option<Rc<String>> {
+    fn map_filespec_to_local(&self, filespec: &SBFileSpec) -> Option<Rc<PathBuf>> {
         if !filespec.is_valid() {
             return None;
         } else {
