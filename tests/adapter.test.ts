@@ -88,7 +88,29 @@ suite('Adapter tests', () => {
             await ds.terminate();
         });
 
-        test('stop on a breakpoint', async function () {
+        test('stop on a breakpoint 1', async function () {
+            let ds = await DebugTestSession.start(adapterLog);
+            let bpLineSource = findMarker(debuggeeSource, '#BP1');
+            let setBreakpointAsyncSource = ds.setBreakpoint(debuggeeSource, bpLineSource);
+
+            let waitForExitAsync = ds.waitForEvent('exited');
+            let waitForStopAsync = ds.waitForStopEvent();
+
+            await ds.launch({ name: 'stop on a breakpoint', program: debuggee, cwd: path.dirname(debuggee) });
+            await setBreakpointAsyncSource;
+
+            log('Wait for stop');
+            let stopEvent = await waitForStopAsync;
+            await ds.verifyLocation(stopEvent.body.threadId, debuggeeSource, bpLineSource);
+
+            log('Continue');
+            await ds.continueRequest({ threadId: 0 });
+            log('Wait for exit');
+            await waitForExitAsync;
+            await ds.terminate();
+        });
+
+        test('stop on a breakpoint 2', async function () {
             let ds = await DebugTestSession.start(adapterLog);
             let bpLineSource = findMarker(debuggeeSource, '#BP1');
             let bpLineHeader = findMarker(debuggeeHeader, '#BPH1');
@@ -103,7 +125,7 @@ suite('Adapter tests', () => {
             //     'header';
             let testcase = 'header_nodylib';
 
-            await ds.launch({ name: 'stop on a breakpoint', program: debuggee, args: [testcase], cwd: path.dirname(debuggee) });
+            await ds.launch({ name: 'stop on a breakpoint 2', program: debuggee, args: [testcase], cwd: path.dirname(debuggee) });
             log('Set breakpoint 1');
             await setBreakpointAsyncSource;
             log('Set breakpoint 2');
@@ -544,6 +566,7 @@ class DebugTestSession extends DebugClient {
             breakpoints: [{ line: line, column: 0, condition: condition }],
         });
         let bp = breakpointResp.body.breakpoints[0];
+        log("%s", inspect(bp));
         assert.ok(bp.verified);
         assert.equal(bp.line, line);
         return breakpointResp;

@@ -154,7 +154,7 @@ set(MochaCommand "${CMAKE_SOURCE_DIR}/node_modules/.bin/mocha${NodeProgExt}"
     --timeout 10000
     --exit
     --require source-map-support/register
-    #-g "expressions"
+    #-g "stop on a breakpoint 1"
     ${CMAKE_BINARY_DIR}/tests/tests
 )
 

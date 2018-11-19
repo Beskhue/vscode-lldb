@@ -29,7 +29,7 @@ use crate::expressions;
 use crate::handles::{self, Handle, HandleTree};
 use crate::must_initialize::{Initialized, MustInitialize, NotInitialized};
 use crate::python::{self, PythonValue};
-use crate::source_map::{self, normalize_path};
+use crate::source_map::{self, normalize_path, is_same_path};
 use crate::terminal::Terminal;
 use lldb::*;
 
@@ -445,7 +445,7 @@ impl DebugSession {
             let mut resolved_line = None;
             for bp_loc in bp.locations() {
                 if let Some(le) = bp_loc.address().line_entry() {
-                    if normalize_path(le.file_spec().path()) == file_path_norm {
+                    if is_same_path(&normalize_path(le.file_spec().path()), &file_path_norm) {
                         resolved_line = Some(le.line());
                     } else {
                         bp_loc.set_enabled(false);
@@ -738,7 +738,7 @@ impl DebugSession {
             BreakpointKind::Source { file_path, .. } => {
                 if let Some(le) = bp_loc.address().line_entry() {
                     if let Some(local_path) = self.map_filespec_to_local(&le.file_spec()) {
-                        local_path.as_path() == Path::new(file_path)
+                        is_same_path(local_path.as_path(), Path::new(file_path))
                     } else {
                         false
                     }
@@ -2016,8 +2016,8 @@ impl DebugSession {
             match source_map_cache.get(&(directory.into(), filename.into())) {
                 Some(localized) => localized.clone(),
                 None => {
-                    debug!("filespec={:?}", filespec);
                     let mut localized = self.source_map.to_local(filespec.path());
+                    debug!("Mapped filespec {:?} to {:?}", filespec, localized);
                     if let Some(ref path) = localized {
                         if self.suppress_missing_files && !path.is_file() {
                             localized = None;

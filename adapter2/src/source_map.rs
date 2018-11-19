@@ -78,6 +78,17 @@ pub fn normalize_path(path: impl AsRef<Path>) -> PathBuf {
     normalized
 }
 
+pub fn is_same_path(path1: &Path, path2: &Path) -> bool {
+    if path1 == path2 {
+        true
+    } else {
+        match (path1.canonicalize(), path2.canonicalize()) {
+            (Ok(path1), Ok(path2)) => path1 == path2,
+            _ => false
+        }
+    }
+}
+
 #[test]
 fn test_normalize_path() {
     assert_eq!(normalize_path("/foo/bar"), Path::new("/foo/bar"));
