@@ -38,7 +38,7 @@ type AsyncResponder = FnBox(&mut DebugSession) -> Result<ResponseBody, Error>;
 #[derive(Debug, Clone)]
 enum BreakpointKind {
     Source {
-        file_path: String,
+        file_path: PathBuf,
         resolved_line: Option<u32>,
     },
     Function,
@@ -75,7 +75,7 @@ enum ExprType {
 }
 
 struct BreakpointsState {
-    source: HashMap<String, HashMap<i64, BreakpointID>>,
+    source: HashMap<PathBuf, HashMap<i64, BreakpointID>>,
     assembly: HashMap<Handle, HashMap<i64, BreakpointID>>,
     function: HashMap<String, BreakpointID>,
     breakpoint_infos: HashMap<BreakpointID, BreakpointInfo>,
@@ -410,17 +410,17 @@ impl DebugSession {
                 &serde_json::from_value::<disassembly::AdapterData>(adapter_data)?,
                 requested_bps,
             ),
-            (None, None, Some(file_path)) => self.set_source_breakpoints(file_path, requested_bps),
+            (None, None, Some(file_path)) => self.set_source_breakpoints(Path::new(file_path), requested_bps),
             _ => unreachable!(),
         }?;
         Ok(SetBreakpointsResponseBody { breakpoints })
     }
 
     fn set_source_breakpoints(
-        &mut self, file_path: &str, requested_bps: &[SourceBreakpoint],
+        &mut self, file_path: &Path, requested_bps: &[SourceBreakpoint],
     ) -> Result<Vec<Breakpoint>, Error> {
         let file_path_norm = normalize_path(file_path);
-        let file_name = file_path_norm.file_name().unwrap().to_str().unwrap();
+        let file_name = file_path_norm.file_name()?;
         let BreakpointsState {
             ref mut source,
             ref mut breakpoint_infos,
@@ -436,7 +436,9 @@ impl DebugSession {
                 .and_then(|bp_id| self.target.find_breakpoint_by_id(*bp_id))
             {
                 Some(bp) => bp,
-                None => self.target.breakpoint_create_by_location(file_name, req.line as u32),
+                None => self
+                    .target
+                    .breakpoint_create_by_location(file_name.to_str()?, req.line as u32),
             };
 
             // Filter locations on full source file path
@@ -455,7 +457,7 @@ impl DebugSession {
                 id: bp.id(),
                 breakpoint: bp,
                 kind: BreakpointKind::Source {
-                    file_path: file_path.to_owned(),
+                    file_path: file_path.into(),
                     resolved_line: resolved_line,
                 },
                 condition: req.condition.clone(),
@@ -565,19 +567,14 @@ impl DebugSession {
                 file_path,
                 resolved_line,
             } => {
-                let file_name = Path::new(&file_path)
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .into_owned();
-
+                let file_name = file_path.file_name().unwrap();
                 Breakpoint {
                     id: Some(bp_info.id as i64),
                     verified: resolved_line.is_some(),
                     line: resolved_line.map(|l| l as i64),
                     source: Some(Source {
-                        name: Some(file_name),
-                        path: Some(file_path.to_owned()),
+                        name: Some(file_name.to_string_lossy().into_owned()),
+                        path: Some(file_path.to_string_lossy().into_owned()),
                         ..Default::default()
                     }),
                     message,
@@ -741,7 +738,7 @@ impl DebugSession {
             BreakpointKind::Source { file_path, .. } => {
                 if let Some(le) = bp_loc.address().line_entry() {
                     if let Some(local_path) = self.map_filespec_to_local(&le.file_spec()) {
-                        local_path.deref() == file_path
+                        local_path.as_path() == Path::new(file_path)
                     } else {
                         false
                     }
@@ -806,7 +803,10 @@ impl DebugSession {
                 launch_env.insert(k.clone(), v.clone());
             }
         }
-        let launch_env = launch_env.iter().map(|(k,v)| format!("{}={}", k, v)).collect::<Vec<String>>();
+        let launch_env = launch_env
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<String>>();
         launch_info.set_environment_entries(launch_env.iter().map(|s| s.as_ref()), false);
 
         if let Some(ref ds) = args.display_settings {
@@ -939,7 +939,7 @@ impl DebugSession {
         Ok(target)
     }
 
-    fn find_executable<'a>(&self, program: &'a str) -> Cow<'a , str> {
+    fn find_executable<'a>(&self, program: &'a str) -> Cow<'a, str> {
         // On Windows, also try program + '.exe'
         // TODO: use selected platform instead of cfg!(windows)
         if cfg!(windows) {
@@ -1107,7 +1107,7 @@ impl DebugSession {
                         stack_frame.column = le.column() as i64;
                         stack_frame.source = Some(Source {
                             name: Some(fs.filename().to_owned()),
-                            path: Some(local_path.as_ref().clone()),
+                            path: Some(local_path.to_string_lossy().into_owned()),
                             ..Default::default()
                         });
                     }
@@ -2023,7 +2023,7 @@ impl DebugSession {
                             localized = None;
                         }
                     }
-                    let localized = localized.map(|path| Rc::new(path.to_string_lossy().into_owned()));
+                    let localized = localized.map(|path| Rc::new(path));
                     source_map_cache.insert(
                         (directory.to_owned().into(), filename.to_owned().into()),
                         localized.clone(),
