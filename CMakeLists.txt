@@ -164,10 +164,10 @@ endif()
 
 set(MochaCommand "${CMAKE_SOURCE_DIR}/node_modules/.bin/mocha${NodeProgExt}"
     -u tdd
-    --timeout 30000
+    --timeout 10000
     --exit
     --require source-map-support/register
-    #-g "stop on a breakpoint 1"
+    #-g "stop on entry"
     ${CMAKE_BINARY_DIR}/tests/tests
 )
 

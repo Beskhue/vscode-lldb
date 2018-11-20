@@ -763,7 +763,9 @@ class DebugSession:
             self.send_response(self.launch_args['response'], e)
         # Make sure VSCode knows if the process was initially stopped.
         if self.process is not None and self.process.is_stopped:
-            self.notify_target_stopped(None)
+            self.update_threads()
+            tid = iter(self.known_threads).next()
+            self.send_event('stopped',  { 'allThreadsStopped': True, 'threadId': tid, 'reason': 'initial' })
 
     def DEBUG_pause(self, args):
         error = self.process.Stop()

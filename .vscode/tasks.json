@@ -23,6 +23,10 @@
       "group": "build"
     },
     {
+      "label": "adapter",
+      "group": "build"
+    },
+    {
       "label": "codelldb",
       "group": "build"
     },
@@ -36,6 +40,9 @@
       "args": [
         "check"
       ],
+      "presentation": {
+        "clear": true
+      },
       "problemMatcher": [
         "$rustc"
       ],

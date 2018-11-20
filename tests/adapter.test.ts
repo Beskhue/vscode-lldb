@@ -11,7 +11,7 @@ import { WritableStream } from 'memory-streams';
 
 import * as util from '../extension/util';
 
-const triple = process.env.TARGET_TRIPLE;
+const triple = process.env.TARGET_TRIPLE || '';
 const useAdapter2 = !!process.env.USE_ADAPTER2;
 
 const sourceDir = process.cwd();
@@ -76,14 +76,11 @@ suite('Adapter tests', () => {
 
         test('stop on entry', async function () {
             let ds = await DebugTestSession.start(adapterLog);
-            let stopAsync = ds.waitForStopEvent();
-            ds.launch({ program: debuggee, stopOnEntry: true });
+            let stopAsync = ds.waitForEvent('stopped');
+            await ds.launch({ program: debuggee, stopOnEntry: true });
             log('Waiting for stop');
-            let stopEvent = await stopAsync;
-            if (/windows/.test(triple))
-                assert.equal(stopEvent.body.reason, 'exception');
-            else
-                assert.equal(stopEvent.body.reason, 'signal');
+            let stopEvent = <dp.StoppedEvent>await stopAsync;
+            assert.equal(stopEvent.body.reason, 'initial');
             log('Terminating');
             await ds.terminate();
         });
@@ -354,7 +351,7 @@ suite('Adapter tests', () => {
             if (ptraceLocked) this.skip();
 
             let ds = await DebugTestSession.start(adapterLog);
-            let asyncWaitStopped = ds.waitForStopEvent();
+            let asyncWaitStopped = ds.waitForEvent('stopped');
             let attachResp = await ds.attach({ program: debuggee, pid: debuggeeProc.pid, stopOnEntry: true });
             assert(attachResp.success);
             await asyncWaitStopped;
@@ -365,23 +362,12 @@ suite('Adapter tests', () => {
             if (ptraceLocked) this.skip();
 
             let ds = await DebugTestSession.start(adapterLog);
-            let asyncWaitStopped = ds.waitForStopEvent();
+            let asyncWaitStopped = ds.waitForEvent('stopped');
             let attachResp = await ds.attach({ program: debuggee, stopOnEntry: true });
             assert(attachResp.success);
             await asyncWaitStopped;
             await ds.terminate();
         });
-
-        // Does not seem to work on OSX either :(
-        // if (process.platform == 'darwin') {
-        //     test('attach by name + waitFor', async function() {
-        //         let asyncWaitStopped = waitForStopEvent();
-        //         let attachResp = await attach({ program: debuggee, waitFor: true, stopOnEntry: true });
-        //         assert(attachResp.success);
-        //         debuggeeProc = cp.spawn(debuggee, ['inf_loop'], {});
-        //         await asyncWaitStopped;
-        //     });
-        // }
     })
 
     suite('Rust tests', () => {
@@ -643,12 +629,12 @@ class DebugTestSession extends DebugClient {
     async waitForStopEvent(): Promise<dp.StoppedEvent> {
         for (; ;) {
             let event = <dp.StoppedEvent>await this.waitForEvent('stopped');
-            // On OSX, debuggee starts out in a 'stopped' state, then eventually gets resumed after
-            // debugger initialization is complete.
+            // In some LLDB versions, debuggee starts out in a 'stopped' state,
+            // then eventually gets resumed after debugger initialization is complete.
             // This initial stopped event interferes with our tests that await stop on a breakpoint.
             // Its distinguishing feature of initial stop is that the threadId is not set, so we use
             // that fact to ignore them.
-            if (event.body.threadId) {
+            if (event.body.reason != 'initial') {
                 return event;
             }
         }

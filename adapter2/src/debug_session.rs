@@ -29,7 +29,7 @@ use crate::expressions;
 use crate::handles::{self, Handle, HandleTree};
 use crate::must_initialize::{Initialized, MustInitialize, NotInitialized};
 use crate::python::{self, PythonValue};
-use crate::source_map::{self, normalize_path, is_same_path};
+use crate::source_map::{self, is_same_path, normalize_path};
 use crate::terminal::Terminal;
 use lldb::*;
 
@@ -1046,7 +1046,15 @@ impl DebugSession {
 
             if self.process.is_initialized() {
                 if self.process.state().is_stopped() {
-                    self.notify_process_stopped();
+                    self.update_threads();
+                    self.send_event(EventBody::stopped(StoppedEventBody {
+                        all_threads_stopped: Some(true),
+                        thread_id: Some(*self.known_threads.iter().next().unwrap() as i64),
+                        reason: "initial".to_owned(),
+                        description: None,
+                        text: None,
+                        preserve_focus_hint: None,
+                    }));
                 }
             }
         }
@@ -1905,11 +1913,11 @@ impl DebugSession {
 
         self.send_event(EventBody::stopped(StoppedEventBody {
             all_threads_stopped: Some(true),
-            description: None,
-            preserve_focus_hint: None,
-            reason: stop_reason_str.to_owned(),
-            text: description,
             thread_id: stopped_thread.map(|t| t.thread_id() as i64),
+            reason: stop_reason_str.to_owned(),
+            description: None,
+            text: description,
+            preserve_focus_hint: None,
         }));
 
         let interpreter = self.debugger.command_interpreter();

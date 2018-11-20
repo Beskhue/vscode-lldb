@@ -125,12 +125,12 @@
 				"--timeout", "999999",
 				"--colors",
 				"--exit",
-				//"-g", "stop on a breakpoint",
+				"-g", "stop on entry",
 				"build/tests/tests"
 			],
 			"env": {
 				//"USE_ADAPTER2": "1",
-				"TARGET_TRIPLE": "x86_64-pc-windows-gnu",
+				//"TARGET_TRIPLE": "x86_64-pc-windows-gnu",
 				"RUST_LOG": "error,codelldb=debug",
 				"RUST_BACKTRACE": "full"
 			},
