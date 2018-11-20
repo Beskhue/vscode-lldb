@@ -84,7 +84,7 @@ pub fn is_same_path(path1: &Path, path2: &Path) -> bool {
     } else {
         match (path1.canonicalize(), path2.canonicalize()) {
             (Ok(path1), Ok(path2)) => path1 == path2,
-            _ => false
+            _ => false,
         }
     }
 }
