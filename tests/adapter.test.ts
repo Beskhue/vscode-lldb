@@ -523,13 +523,8 @@ class DebugTestSession extends DebugClient {
     }
 
     async terminate() {
-        try {
-            log('Stopping adapter.');
-            await withTimeout(1000, super.stop());
-        } catch (err) {
-            log('Adapter did not stop in time - killing.')
-            this.adapter.kill();
-        }
+        log('Stopping adapter.');
+        super.stop();
     }
 
     async launch(launchArgs: any): Promise<dp.LaunchResponse> {
