@@ -13,6 +13,7 @@ import * as util from '../extension/util';
 
 const triple = process.env.TARGET_TRIPLE || '';
 const useAdapter2 = !!process.env.USE_ADAPTER2;
+const dumpLogsWhen = (process.env.DUMP_LOGS || 'onerror').toLowerCase();
 
 const sourceDir = process.cwd();
 
@@ -45,8 +46,8 @@ suite('Adapter tests', () => {
     });
 
     teardown(async function () {
-        if (this.currentTest.state == 'failed')
-            dumpLogs();
+        if (dumpLogsWhen != 'never' && (this.currentTest.state == 'failed' || dumpLogsWhen == 'always'))
+            dumpLogs(process.stderr);
     });
 
     suite('Basic', () => {
@@ -77,10 +78,9 @@ suite('Adapter tests', () => {
         test('stop on entry', async function () {
             let ds = await DebugTestSession.start(adapterLog);
             let stopAsync = ds.waitForEvent('stopped');
-            await ds.launch({ program: debuggee, stopOnEntry: true });
+            await ds.launch({ program: debuggee, args: ['inf_loop'], stopOnEntry: true });
             log('Waiting for stop');
-            let stopEvent = <dp.StoppedEvent>await stopAsync;
-            assert.equal(stopEvent.body.reason, 'initial');
+            await stopAsync;
             log('Terminating');
             await ds.terminate();
         });
@@ -703,12 +703,12 @@ function log(fmt: string, ...params: any[]) {
     testLog.write(line);
 }
 
-function dumpLogs() {
-    console.error('--- Test log ---');
-    console.error(testLog.toString());
-    console.error('--- Adapter log ---');
-    console.error(adapterLog.toString());
-    console.error('------------------')
+function dumpLogs(dest: stream.Writable) {
+    dest.write('--- Test log ---\n');
+    dest.write(testLog.toString());
+    dest.write('\n--- Adapter log ---\n');
+    dest.write(adapterLog.toString());
+    dest.write('\n------------------\n');
 }
 
 // process.on('uncaughtException', (err) => {
