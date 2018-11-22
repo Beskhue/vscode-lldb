@@ -5,7 +5,7 @@ if (${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Linux")
     )
     add_copy_files(lldb_lib
         DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/lib
-        FILES ${LLDB_ROOT}/lib/liblldb.so ${LLDB_ROOT}/lib/liblldb.so.8svn
+        FILES ${LLDB_ROOT}/lib/liblldb.so.8-custom
     )
     add_copy_directory(lldb_python
         ${LLDB_ROOT}/lib/python2.7/site-packages
@@ -20,7 +20,7 @@ elseif (${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Darwin")
     )
     add_copy_files(lldb_lib
         DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/lib
-        FILES ${LLDB_ROOT}/lib/liblldb.dylib ${LLDB_ROOT}/lib/liblldb.8.0.0.dylib
+        FILES ${LLDB_ROOT}/lib/liblldb.8.0.0.dylib
     )
     add_copy_directory(lldb_python
         ${LLDB_ROOT}/lib/python2.7/site-packages

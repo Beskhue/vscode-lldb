@@ -1,13 +1,17 @@
 extern crate clap;
 extern crate env_logger;
+extern crate failure;
+extern crate globset;
+extern crate walkdir;
 
 use self::loading::*;
 use clap::{App, Arg};
+use globset::*;
 use std::env;
 use std::mem;
 use std::path;
 
-fn main() -> Result<(), std::io::Error> {
+fn main() -> Result<(), failure::Error> {
     env_logger::Builder::from_default_env().init();
 
     let matches = App::new("codelldb")
@@ -21,18 +25,50 @@ fn main() -> Result<(), std::io::Error> {
     let mut liblldb_path: path::PathBuf = matches.value_of("lldb").unwrap().into();
 
     if liblldb_path.is_dir() {
+        let mut builder = GlobSetBuilder::new();
         if cfg!(windows) {
-            liblldb_path.push("bin/liblldb.dll");
+            builder.add(Glob::new("**/bin/liblldb.dll").unwrap());
+            builder.add(Glob::new("**/bin/liblldb.*.dll").unwrap());
         } else if cfg!(target_os = "macos") {
-            liblldb_path.push("lib/liblldb.dylib");
+            builder.add(Glob::new("**/lib/liblldb.dylib").unwrap());
+            builder.add(Glob::new("**/lib/liblldb.*.dylib").unwrap());
         } else {
-            liblldb_path.push("lib/liblldb.so");
+            builder.add(Glob::new("**/lib/liblldb.so").unwrap());
+            builder.add(Glob::new("**/lib/liblldb.so.*").unwrap());
+        }
+        let matcher = builder.build().unwrap();
+        let mut found = None;
+        for entry in walkdir::WalkDir::new(&liblldb_path).follow_links(true).max_depth(2) {
+            let entry = entry?;
+            if matcher.is_match(entry.path()) {
+                found = Some(entry.into_path());
+                break;
+            }
+        }
+        liblldb_path = match found {
+            Some(path) => path,
+            None => panic!("Can't find liblldb in {:?}", liblldb_path),
         }
     }
 
     unsafe {
+        if cfg!(windows) {
+            // Append liblldb's directory to the PATH, so that it can find msdiaxxx.dll later.
+            let mut path = env::var_os("PATH").unwrap();
+            path.push(";");
+            path.push(liblldb_path.parent().unwrap());
+            env::set_var("PATH", path);
+
+            // Pre-load python shared lib, because liblldb will need it anyways, and we can produce
+            // a better error message in case it can't be found.
+            load_library(path::Path::new("python36.dll"), false);
+        }
+
+        // Load liblldb with RTLD_GLOBAL option, so that when we load codelldb,
+        // its symbol referenes will get resolved using this instalce of liblldb.
         load_library(&liblldb_path, true);
 
+        // Load codelldb shared lib
         let mut codelldb_path = env::current_exe()?;
         codelldb_path.pop();
         if cfg!(windows) {
@@ -44,10 +80,7 @@ fn main() -> Result<(), std::io::Error> {
         }
         let codelldb = load_library(&codelldb_path, false);
 
-        if cfg!(windows) {
-            load_library(path::Path::new("python36.dll"), false);
-        }
-
+        // Find codelldb's entry point and call it.
         let entry: unsafe extern "C" fn(u16, bool) = mem::transmute(find_symbol(codelldb, "entry"));
         entry(port, multi_session);
     }
