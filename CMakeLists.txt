@@ -54,7 +54,6 @@ if (${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Linux")
                    ${CMAKE_CURRENT_BINARY_DIR}/adapter2/libcodelldb.so
                    ${CMAKE_CURRENT_BINARY_DIR}/lldb/bin/lldb
                    ${CMAKE_CURRENT_BINARY_DIR}/lldb/bin/lldb-server
-                   ${CMAKE_CURRENT_BINARY_DIR}/lldb/lib/liblldb.so
                    ${CMAKE_CURRENT_BINARY_DIR}/lldb/lib/liblldb.so.8-custom
                    ${CMAKE_CURRENT_BINARY_DIR}/lldb/lib/python2.7/site-packages/lldb/lldb-argdumper
                    )
