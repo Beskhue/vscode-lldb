@@ -152,7 +152,9 @@ suite('Adapter tests', () => {
             let setBreakpointAsync = ds.setBreakpoint(debuggeeSource, bpLine);
             let waitForStopAsync = ds.waitForStopEvent();
             await ds.launch({ name: 'page stack', program: debuggee, args: ['deepstack'] });
+            log('Wait for setBreakpoint');
             await setBreakpointAsync;
+            log('Wait for stop');
             let stoppedEvent = await waitForStopAsync;
             let response2 = await ds.stackTraceRequest({ threadId: stoppedEvent.body.threadId, startFrame: 20, levels: 10 });
             assert.equal(response2.body.stackFrames.length, 10)
@@ -552,7 +554,7 @@ class DebugTestSession extends DebugClient {
             breakpoints: [{ line: line, column: 0, condition: condition }],
         });
         let bp = breakpointResp.body.breakpoints[0];
-        log("%s", inspect(bp));
+        log("Received setBreakpoint response: %s", inspect(bp));
         assert.ok(bp.verified);
         assert.equal(bp.line, line);
         return breakpointResp;
@@ -563,7 +565,6 @@ class DebugTestSession extends DebugClient {
         let breakpointResp = await this.setFunctionBreakpointsRequest({
             breakpoints: [{ name: name, condition: condition }]
         });
-        let bp = breakpointResp.body.breakpoints[0];
         return breakpointResp;
     }
 
@@ -637,6 +638,7 @@ class DebugTestSession extends DebugClient {
             if (event.body.reason != 'initial') {
                 return event;
             }
+            log('Ignored "initial" event');
         }
     }
 
