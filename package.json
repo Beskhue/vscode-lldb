@@ -228,6 +228,11 @@
 						"external",
 						"console"
 					],
+					"enumDescriptions": [
+						"Use integrated terminal in VSCode.",
+						"Use external terminal window.",
+						"Use VScode Debug Console for stdout and stderr. Stdin will be unavailable."
+					],
 					"default": "console",
 					"scope": "resource"
 				},
@@ -279,7 +284,7 @@
 					"default": 4711
 				},
 				"lldb.dbgconfig": {
-					"description": "User settings",
+					"description": "Common used-defined settings that can be inserted into launch configurations using ${dbgconfig:name} syntax.",
 					"type": "object",
 					"patternProperties": {
 						".*": {
@@ -401,6 +406,11 @@
 									"integrated",
 									"external",
 									"console"
+								],
+								"enumDescriptions": [
+									"Use integrated terminal in VSCode.",
+									"Use external terminal window.",
+									"Use VScode Debug Console for stdout and stderr. Stdin will be unavailable."
 								],
 								"default": "integrated"
 							},
@@ -683,5 +693,15 @@
 				]
 			}
 		]
+	},
+	"config": {
+		"platformPackages": {
+			"baseUrl": "https://github.com/vadimcn/vscode-lldb/releases/download/v20181124.3/",
+			"names": {
+				"linux": "vscode-lldb-linux.vsix",
+				"darwin": "vscode-lldb-osx.vsix",
+				"win32": "vscode-lldb-windows.vsix"
+			}
+		}
 	}
 }

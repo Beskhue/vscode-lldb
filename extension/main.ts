@@ -209,15 +209,20 @@ class Extension implements DebugConfigurationProvider {
     }
 
     async test() {
-        let url = "https://github.com/vadimcn/vscode-lldb/releases/download/v20181115.6/vscode-lldb-linux.vsix";
-        let file = path.join(os.tmpdir(), 'vscode-lldb.vsix');
-        // try {
-        //     await install.download(url, file);
-        // } catch (err) {
-        //     window.showErrorMessage('Could not download native dependencies');
-        //     return;
-        // }
-        install.installVsix(file, this.context);
+        let vsixTmp = path.join(os.tmpdir(), 'vscode-lldb-full.vsix');
+        output.appendLine('Downloading platform package...');
+        let lastPercent = -100;
+        await install.downloadPlatformPackage(this.context, vsixTmp, (downloaded, contentLength)=> {
+            let percent = Math.round(100 * downloaded / contentLength);
+            if (percent > lastPercent + 5) {
+                output.appendLine(format('Downloaded %d%%', percent));
+                lastPercent = percent;
+            }
+        });
+        output.appendLine('Download complete.');
+        output.appendLine('Installing...')
+        await install.installVsix(this.context, vsixTmp);
+        output.appendLine('Done.')
     }
 };
 
