@@ -1,9 +1,6 @@
 import {
-    workspace, languages, window, commands,
-    ExtensionContext, Disposable, QuickPickItem, Uri, Event, EventEmitter, OutputChannel, ConfigurationTarget,
-    WorkspaceFolder, WorkspaceConfiguration
+    workspace, ExtensionContext, WorkspaceFolder, WorkspaceConfiguration
 } from 'vscode';
-import { format, inspect } from 'util';
 import * as cp from 'child_process';
 import * as path from 'path';
 import * as util from './util';
@@ -20,10 +17,10 @@ export class AdapterProcess {
         process.on('exit', (code, signal) => {
             this.isAlive = false;
             if (signal) {
-                output.appendLine(format('Adapter terminated by %s signal.', signal));
+                output.appendLine(`Adapter terminated by ${signal} signal.`);
             }
             if (code) {
-                output.appendLine(format('Adapter exit code: %d.', code));
+                output.appendLine(`Adapter exit code: ${code}`);
             }
         });
     }
@@ -55,8 +52,8 @@ export async function startDebugAdapter(
         let paramsBase64 = new Buffer(JSON.stringify(params)).toString('base64');
 
         adapterArgs = ['-b',
-            '-O', format('command script import \'%s\'', path.join(context.extensionPath, 'adapter')),
-            '-O', format('script adapter.run_tcp_session(0, \'%s\')', paramsBase64)
+            '-O', `command script import '${path.join(context.extensionPath, 'adapter')}'`,
+            '-O', `script adapter.run_tcp_session(0, '${paramsBase64}')`
         ];
         if (config.get('lldbType') != 'packaged') {
             adapterExe = config.get('executable', 'lldb');

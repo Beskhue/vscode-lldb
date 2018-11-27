@@ -1,6 +1,5 @@
 import { QuickPickItem, WorkspaceConfiguration, DebugConfiguration, OutputChannel } from 'vscode';
 import * as cp from 'child_process';
-import { format } from 'util';
 import * as stream from 'stream';
 
 export interface Dict<T> {
@@ -112,7 +111,7 @@ export async function getProcessList(currentUserOnly: boolean):
             let pid = parseInt(groups[idx[0]]);
             let name = groups[idx[1]];
             let descr = groups[idx[2]];
-            let item = { label: format('%d: %s', pid, name), description: descr, pid: pid };
+            let item = { label: `${pid}: ${name}`, description: descr, pid: pid };
             items.unshift(item);
         }
     }

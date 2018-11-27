@@ -3,14 +3,14 @@ import * as https from 'https';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { promisify, format } from 'util';
+import { promisify } from 'util';
 import { IncomingMessage } from 'http';
-import { ExtensionContext, workspace, window, OutputChannel, Uri, commands } from 'vscode';
+import { ExtensionContext, workspace, window, OutputChannel, Uri, commands, ProgressLocation } from 'vscode';
 import { Writable } from 'stream';
 
 const MaxRedirects = 10;
-const existsAsync = promisify(fs.exists);
 const readFileAsync = promisify(fs.readFile);
+const existsAsync = promisify(fs.exists);
 
 export async function installPlatformPackageIfNeeded(context: ExtensionContext, output: OutputChannel): Promise<boolean> {
     let lldbConfig = workspace.getConfiguration('lldb');
@@ -24,7 +24,8 @@ export async function installPlatformPackageIfNeeded(context: ExtensionContext, 
         'The selected configuration settings require installation of platform-specific files.',
         { modal: true },
         { title: 'Download and install automatically', id: 'auto' },
-        { title: 'Open URL in a browser', id: 'manual' });
+        { title: 'Open URL in a browser', id: 'manual' }
+    );
     if (choice == undefined) {
         return false;
     }
@@ -46,15 +47,17 @@ export async function installPlatformPackageIfNeeded(context: ExtensionContext, 
                 await download(packageUrl, vsixTmp, (downloaded, contentLength) => {
                     let percent = Math.round(100 * downloaded / contentLength);
                     if (percent > lastPercent + 5) {
-                        output.appendLine(format('Downloaded %d%%', percent));
+                        output.appendLine(`Downloaded ${percent}%`);
                         lastPercent = percent;
                     }
                 });
             } catch (err) {
-                let choice = await window.showErrorMessage(format('Download of the platform package has failed: %s.\n\n' +
-                    'You can still try to download and install it manually.', err),
+                let choice = await window.showErrorMessage(
+                    `Download of the platform package has failed: ${err}.\n\n` +
+                    `You can still try to download and install it manually.`,
                     { modal: true },
-                    'Open URL in a browser');
+                    'Open URL in a browser'
+                );
                 if (choice != undefined) {
                     commands.executeCommand('vscode.open', Uri.parse(packageUrl));
                 }
