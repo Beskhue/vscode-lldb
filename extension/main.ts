@@ -1,13 +1,9 @@
 import {
     workspace, window, commands, debug,
-    ExtensionContext, Uri, Event, EventEmitter,
-    TextDocumentContentProvider, WorkspaceConfiguration, WorkspaceFolder, CancellationToken,
-    DebugConfigurationProvider, DebugConfiguration, DebugSession, DebugSessionCustomEvent,
+    ExtensionContext, WorkspaceConfiguration, WorkspaceFolder, CancellationToken,
+    DebugConfigurationProvider, DebugConfiguration,
 } from 'vscode';
-import * as os from 'os';
-import * as path from 'path';
-import * as cp from 'child_process';
-import { format, inspect } from 'util';
+import { inspect } from 'util';
 import * as diagnostics from './diagnostics';
 import * as startup from './adapter';
 import * as htmlView from './htmlView';
@@ -54,8 +50,6 @@ class Extension implements DebugConfigurationProvider {
         this.registerDisplaySettingCommand('lldb.toggleContainerSummary', async (settings) => {
             settings.containerSummary = !settings.containerSummary;
         });
-
-        subscriptions.push(commands.registerCommand('lldb.test', () => this.test()));
     }
 
     registerDisplaySettingCommand(command: string, updater: (settings: DisplaySettings) => Promise<void>) {
@@ -99,6 +93,9 @@ class Extension implements DebugConfigurationProvider {
         launchConfig: DebugConfiguration,
         token?: CancellationToken
     ): Promise<DebugConfiguration> {
+        if (!await install.installPlatformPackageIfNeeded(this.context, output))
+            throw new Error('Debugging cancelled.');
+
         if (!this.context.globalState.get('lldb_works')) {
             window.showInformationMessage("Since this is the first time you are starting LLDB, I'm going to run some quick diagnostics...");
             let succeeded = await diagnostics.diagnose(output);
@@ -204,25 +201,8 @@ class Extension implements DebugConfigurationProvider {
         if (item) {
             return item.pid.toString();
         } else {
-            throw Error('Cancelled');
+            return undefined;
         }
-    }
-
-    async test() {
-        let vsixTmp = path.join(os.tmpdir(), 'vscode-lldb-full.vsix');
-        output.appendLine('Downloading platform package...');
-        let lastPercent = -100;
-        await install.downloadPlatformPackage(this.context, vsixTmp, (downloaded, contentLength)=> {
-            let percent = Math.round(100 * downloaded / contentLength);
-            if (percent > lastPercent + 5) {
-                output.appendLine(format('Downloaded %d%%', percent));
-                lastPercent = percent;
-            }
-        });
-        output.appendLine('Download complete.');
-        output.appendLine('Installing...')
-        await install.installVsix(this.context, vsixTmp);
-        output.appendLine('Done.')
     }
 };
 

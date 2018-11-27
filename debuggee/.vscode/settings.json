@@ -1,13 +1,13 @@
 {
-    "lldb.logLevel": 0,
-    //"lldb.launch.debugServer": 4711,
-    //"lldb.useAdapter2": true,
+    "lldb.launch.initCommands": [
+        "set set target.x86-disassembly-flavor intel"
+    ],
     "lldb.dbgconfig": {
         "targetDir": "${workspaceFolder}/../build/debuggee"
         //"targetDir": "${workspaceFolder}/../build/debuggee-gnu"
         //"targetDir": "${workspaceFolder}/../build/debuggee-msvc"
     },
-    "lldb.launch.initCommands": [
-        "set set target.x86-disassembly-flavor intel"
-    ]
+    //"lldb.lldbType": "packaged"
+    //"lldb.adapterType": "native",
+    //"lldb.launch.debugServer": 4711,
 }

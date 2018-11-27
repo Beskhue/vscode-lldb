@@ -1,18 +1,79 @@
 import * as zip from 'yauzl';
 import * as https from 'https';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { promisify, format } from 'util';
 import { IncomingMessage } from 'http';
-import { ExtensionContext, OutputChannel } from 'vscode';
+import { ExtensionContext, workspace, window, OutputChannel, Uri, commands } from 'vscode';
+import { Writable } from 'stream';
 
 const MaxRedirects = 10;
-
+const existsAsync = promisify(fs.exists);
 const readFileAsync = promisify(fs.readFile);
 
-type ProgressCallback = (downloaded: number, contentLength?: number) => void;
+export async function installPlatformPackageIfNeeded(context: ExtensionContext, output: OutputChannel): Promise<boolean> {
+    let lldbConfig = workspace.getConfiguration('lldb');
+    if (lldbConfig.get('adapterType') != 'native' && lldbConfig.get('lldbType') != 'packaged')
+        return true;
 
-export async function downloadPlatformPackage(context: ExtensionContext, destPath: string, progress?: ProgressCallback) {
+    if (await existsAsync(path.join(context.extensionPath, 'lldb/bin')))
+        return true;
+
+    let choice = await window.showInformationMessage(
+        'The selected configuration settings require installation of platform-specific files.',
+        { modal: true },
+        { title: 'Download and install automatically', id: 'auto' },
+        { title: 'Open URL in a browser', id: 'manual' });
+    if (choice == undefined) {
+        return false;
+    }
+
+    try {
+        let packageUrl = await getPlatformPackageUrl(context);
+        output.appendLine('Platform package is located at ' + packageUrl);
+        if (choice.id == 'manual') {
+            commands.executeCommand('vscode.open', Uri.parse(packageUrl));
+            return false;
+        }
+
+        let vsixTmp = path.join(os.tmpdir(), 'vscode-lldb-full.vsix');
+        output.show();
+        output.appendLine('Downloading platform package...');
+        try {
+            try {
+                let lastPercent = -100;
+                await download(packageUrl, vsixTmp, (downloaded, contentLength) => {
+                    let percent = Math.round(100 * downloaded / contentLength);
+                    if (percent > lastPercent + 5) {
+                        output.appendLine(format('Downloaded %d%%', percent));
+                        lastPercent = percent;
+                    }
+                });
+            } catch (err) {
+                let choice = await window.showErrorMessage(format('Download of the platform package has failed: %s.\n\n' +
+                    'You can still try to download and install it manually.', err),
+                    { modal: true },
+                    'Open URL in a browser');
+                if (choice != undefined) {
+                    commands.executeCommand('vscode.open', Uri.parse(packageUrl));
+                }
+                return false;
+            }
+            output.appendLine('Download complete.');
+            output.appendLine('Installing...')
+        } catch (err) {
+        }
+        await installVsix(context, vsixTmp);
+        output.appendLine('Done.')
+        return true;
+    } catch (err) {
+        window.showErrorMessage(err.toString());
+        return false;
+    }
+}
+
+async function getPlatformPackageUrl(context: ExtensionContext): Promise<string> {
     let content = await readFileAsync(path.join(context.extensionPath, 'package.json'));
     let pkg = JSON.parse(content.toString());
     let pp = pkg.config.platformPackages;
@@ -20,11 +81,12 @@ export async function downloadPlatformPackage(context: ExtensionContext, destPat
     if (packageName == undefined) {
         throw new Error('Current platform is not suported.');
     }
-    let packageUrl = pp.baseUrl + packageName;
-    await download(packageUrl, destPath, progress);
+    return pp.baseUrl + packageName;
 }
 
-async function download(srcUrl: string, destPath: string, progress?: ProgressCallback) {
+async function download(srcUrl: string, destPath: string,
+    progress?: (downloaded: number, contentLength?: number) => void) {
+
     return new Promise(async (resolve, reject) => {
         let response;
         for (let i = 0; i < MaxRedirects; ++i) {
@@ -54,28 +116,26 @@ async function download(srcUrl: string, destPath: string, progress?: ProgressCal
     });
 }
 
-export async function installVsix(context: ExtensionContext, vsixPath: string) {
-    let destDir = path.join(context.extensionPath, '/hren');
-    await extractZip(vsixPath, (entry) => {
-        if (entry.fileName.startsWith('extension/'))
-            return path.join(destDir, entry.fileName.substr(10));
-        else
+async function installVsix(context: ExtensionContext, vsixPath: string) {
+    let destDir = context.extensionPath;
+    await extractZip(vsixPath, async (entry) => {
+        if (entry.fileName.startsWith('extension/')) {
+            let destPath = path.join(destDir, entry.fileName.substr(10));
+            await ensureDirectory(path.dirname(destPath));
+            let stream = fs.createWriteStream(destPath);
+            stream.on('finish', () => {
+                let attrs = (entry.externalFileAttributes >> 16) & 0o7777;
+                fs.chmod(destPath, attrs, (err) => { });
+            });
+            return stream;
+        }
+        else {
             return null;
+        }
     });
-    // let vscode = cp.spawn(process.execPath, ['--install-extension', file], {
-    //     stdio: ['ignore', 'pipe', 'pipe']
-    // });
-    // util.logProcessOutput(vscode, output);
-    // vscode.on('error', err => window.showErrorMessage(err.toString()));
-    // vscode.on('exit', (exitCode, signal) => {
-    //     if (exitCode != 0)
-    //         window.showErrorMessage('Installation failed.');
-    //     else
-    //         window.showInformationMessage('Please restart VS Code to activate extension.');
-    // });
 }
 
-async function extractZip(zipPath: string, callback: (entry: zip.Entry) => string | null) {
+function extractZip(zipPath: string, callback: (entry: zip.Entry) => Promise<Writable> | null): Promise<void> {
     return new Promise((resolve, reject) =>
         zip.open(zipPath, { lazyEntries: true }, (err, zipfile) => {
             if (err) {
@@ -83,29 +143,22 @@ async function extractZip(zipPath: string, callback: (entry: zip.Entry) => strin
             } else {
                 zipfile.readEntry();
                 zipfile.on('entry', (entry: zip.Entry) => {
-                    let destPath = callback(entry);
-                    if (destPath != null) {
-                        ensureDirectory(path.dirname(destPath))
-                            .catch(err => reject(err))
-                            .then(() =>
-                                zipfile.openReadStream(entry, (err, stream) => {
-                                    if (err) {
-                                        reject(err);
-                                    } else {
-                                        let file = fs.createWriteStream(destPath);
-                                        stream.pipe(file);
-                                        stream.on('error', reject);
-                                        stream.on('end', () => {
-                                            let attrs = (entry.externalFileAttributes >> 16) & 0o7777;
-                                            fs.chmod(destPath, attrs, (err) => {
-                                                zipfile.readEntry();
-                                            });
-                                        });
-                                    }
-                                }));
-                    } else {
-                        zipfile.readEntry();
-                    }
+                    callback(entry).then(outstream => {
+                        if (outstream != null) {
+                            zipfile.openReadStream(entry, (err, zipstream) => {
+                                if (err) {
+                                    reject(err);
+                                } else {
+                                    outstream.on('error', reject);
+                                    zipstream.on('error', reject);
+                                    zipstream.on('end', () => zipfile.readEntry());
+                                    zipstream.pipe(outstream);
+                                }
+                            });
+                        } else {
+                            zipfile.readEntry();
+                        }
+                    });
                 });
                 zipfile.on('end', () => {
                     zipfile.close();

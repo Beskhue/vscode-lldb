@@ -66,7 +66,20 @@
       "type": "shell",
       "label": "Start extension host",
       "command": "code --extensionDevelopmentPath=${workspaceRoot}/build ${workspaceRoot}/debuggee",
-      "group": "build"
+      "group": "build",
+      "dependsOn": "extension",
+    },
+    {
+      "label": "vsix_extracted",
+      "group": "build",
+      "problemMatcher": "$tsc"
+    },
+    {
+      "type": "shell",
+      "label": "Start extension host on extracted vsix",
+      "command": "code --extensionDevelopmentPath=${workspaceRoot}/build/tmp/extension ${workspaceRoot}/debuggee",
+      "group": "build",
+      "dependsOn": "vsix_extracted",
     },
   ]
 }

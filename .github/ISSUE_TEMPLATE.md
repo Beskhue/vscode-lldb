@@ -5,6 +5,9 @@ Which VSCode version:  <!-- from Help/About -->
 
 What is the problem and how did you get there:
 
-What did you expect to have happened instead: <!-- if not obvious -->
-
-<!-- If reporting a debugger crash or an internal error, please paste debug output from the Output/LLDB panel here -->
+<!--
+  If reporting a debugger crash or an internal error, please:
+    1. Set "lldb.verboseLogging": true in your workspace configuration,
+    2. Reproduce the problem,
+    3. Paste debug output from Output/LLDB panel here.
+-->

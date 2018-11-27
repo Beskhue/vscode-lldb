@@ -44,16 +44,29 @@ export async function startDebugAdapter(
     let config = workspace.getConfiguration('lldb', folder ? folder.uri : undefined);
     let adapterArgs: string[];
     let adapterExe: string;
-    let adapterEnv = config.get('executable_env', {});
-    if (!config.get('useAdapter2', false)) {
-        let paramsBase64 = getAdapterParameters(config, params);
+    let adapterEnv: Dict<string> = config.get('executable_env', {});
+    if (config.get('adapterType') != 'native') {
+        // Classic
+        if (config.get('verboseLogging', false))
+            params.logLevel = 0;
+        setIfDefined(params, config, 'reverseDebugging');
+        setIfDefined(params, config, 'suppressMissingSourceFiles');
+        setIfDefined(params, config, 'evaluationTimeout');
+        let paramsBase64 = new Buffer(JSON.stringify(params)).toString('base64');
+
         adapterArgs = ['-b',
             '-O', format('command script import \'%s\'', path.join(context.extensionPath, 'adapter')),
             '-O', format('script adapter.run_tcp_session(0, \'%s\')', paramsBase64)
         ];
-        adapterExe = util.getConfigNoDefault(config, 'executable') ||
-            path.join(context.extensionPath, 'lldb/bin/lldb');
+        if (config.get('lldbType') != 'packaged') {
+            adapterExe = config.get('executable', 'lldb');
+        } else {
+            adapterExe = path.join(context.extensionPath, 'lldb/bin/lldb');
+        }
     } else {
+        // Native
+        if (config.get('verboseLogging', false))
+            adapterEnv.RUST_LOG = 'error,codelldb=debug';
         adapterArgs = ["--lldb=" + path.join(context.extensionPath, 'lldb')];
         adapterExe = path.join(context.extensionPath, 'adapter2/codelldb');
     }
@@ -72,18 +85,6 @@ function setIfDefined(target: Dict<any>, config: WorkspaceConfiguration, key: st
     if (value !== undefined)
         target[key] = value;
 }
-
-function getAdapterParameters(config: WorkspaceConfiguration, params: Dict<any>): string {
-    setIfDefined(params, config, 'logLevel');
-    setIfDefined(params, config, 'loggers');
-    setIfDefined(params, config, 'logFile');
-    setIfDefined(params, config, 'reverseDebugging');
-    setIfDefined(params, config, 'suppressMissingSourceFiles');
-    setIfDefined(params, config, 'evaluationTimeout');
-    setIfDefined(params, config, 'ptvsd');
-    return new Buffer(JSON.stringify(params)).toString('base64');
-}
-
 
 // Spawn LLDB with the specified arguments, wait for it to output something matching
 // regex pattern, or until the timeout expires.

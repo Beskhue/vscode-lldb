@@ -130,6 +130,12 @@ add_custom_target(vsix_full
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
+add_custom_target(vsix_extracted
+    DEPENDS vsix_portable
+    COMMAND rm -rf ${CMAKE_CURRENT_BINARY_DIR}/tmp
+    COMMAND unzip -o ${CMAKE_CURRENT_BINARY_DIR}/vscode-lldb-portable.vsix -d ${CMAKE_CURRENT_BINARY_DIR}/tmp
+)
+
 ### Debuggee
 
 if (NOT ${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Windows")

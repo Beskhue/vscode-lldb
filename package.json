@@ -53,8 +53,7 @@
 	"activationEvents": [
 		"onDebug",
 		"onCommand:lldb.diagnose",
-		"onCommand:lldb.getCargoLaunchConfigs",
-		"onCommand:lldb.test"
+		"onCommand:lldb.getCargoLaunchConfigs"
 	],
 	"contributes": {
 		"commands": [
@@ -92,11 +91,6 @@
 				"category": "LLDB",
 				"title": "Generate launch configurations from Cargo.toml",
 				"command": "lldb.getCargoLaunchConfigs"
-			},
-			{
-				"category": "LLDB",
-				"title": "Test",
-				"command": "lldb.test"
 			}
 		],
 		"languages": [
@@ -141,26 +135,35 @@
 				"lldb.useAdapter2": {
 					"type": "boolean"
 				},
-				"lldb.logLevel": {
-					"description": "Global logging level, as defined by Python's 'logging' module (0=Verbose, 10=Debug, 20=Info, 30=Warning, 40=Error, 50=Critical).",
-					"type": "integer",
-					"default": 0,
-					"scope": "resource"
-				},
-				"lldb.loggers": {
-					"description": "Logging level for individual loggers as <logger name>:<log level> (0=Verbose, 10=Debug, 20=Info, 30=Warning, 40=Error, 50=Critical)",
-					"type": "object",
-					"patternProperties": {
-						".*": {
-							"type": "integer",
-							"default": 0
-						}
-					},
-					"scope": "resource"
-				},
-				"lldb.logFile": {
-					"description": "Log file path. (default=VSCode 'Output' panel)",
+				"lldb.adapterType": {
+					"description": "Which debug adapter implementtion to use.",
 					"type": "string",
+					"default": "classic",
+					"enum": [
+						"classic",
+						"native"
+					],
+					"enumDescriptions": [
+						"Use classic, Python-based, debug adapter",
+						"[beta] Use native debug adapter.  Requires one-time download of platform-specific files."
+					]
+				},
+				"lldb.lldbType": {
+					"description": "Which LLDB runtime to use.",
+					"type": "string",
+					"enum": [
+						"external",
+						"packaged"
+					],
+					"enumDescriptions": [
+						"Use existing LLDB installation on this machine.",
+						"[beta] Use LLDB provided by this extension.  Requires one-time download of platform-specific files."
+					]
+				},
+				"lldb.verboseLogging": {
+					"description": "Turns on verbose logging.",
+					"type": "boolean",
+					"default": false,
 					"scope": "resource"
 				},
 				"lldb.reverseDebugging": {
