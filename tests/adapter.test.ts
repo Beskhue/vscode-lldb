@@ -519,7 +519,7 @@ class DebugTestSession extends DebugClient {
             session.adapter.stderr.pipe(logStream);
 
             let regex = new RegExp('^Listening on port (\\d+)\\s', 'm');
-            let match = await util.waitForPattern(session.adapter, session.adapter.stdout, regex);
+            let match = await util.waitForPattern(session.adapter, session.adapter.stdout, regex, 10000);
             session.port = parseInt(match[1]);
         }
         await session.start(session.port);
