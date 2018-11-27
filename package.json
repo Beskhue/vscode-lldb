@@ -1,7 +1,7 @@
 {
 	"name": "vscode-lldb",
 	"displayName": "CodeLLDB",
-	"version": "1.1.2",
+	"version": "1.2.0-alpha",
 	"publisher": "vadimcn",
 	"description": "Debug your native code with LLDB.",
 	"license": "MIT",
@@ -699,8 +699,8 @@
 	},
 	"config": {
 		"platformPackages": {
-			"baseUrl": "https://github.com/vadimcn/vscode-lldb/releases/download/v20181124.3/",
-			"names": {
+			"url": "https://github.com/vadimcn/vscode-lldb/releases/download/v${version}/${platformPackage}",
+			"platforms": {
 				"linux": "vscode-lldb-linux.vsix",
 				"darwin": "vscode-lldb-osx.vsix",
 				"win32": "vscode-lldb-windows.vsix"

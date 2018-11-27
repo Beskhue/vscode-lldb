@@ -79,12 +79,13 @@ export async function installPlatformPackageIfNeeded(context: ExtensionContext, 
 async function getPlatformPackageUrl(context: ExtensionContext): Promise<string> {
     let content = await readFileAsync(path.join(context.extensionPath, 'package.json'));
     let pkg = JSON.parse(content.toString());
+    let version = pkg.version;
     let pp = pkg.config.platformPackages;
-    let packageName = pp.names[process.platform];
-    if (packageName == undefined) {
+    let platformPackage = pp.platforms[process.platform];
+    if (platformPackage == undefined) {
         throw new Error('Current platform is not suported.');
     }
-    return pp.baseUrl + packageName;
+    return pp.url.replace('${version}', version).replace('${platformPackage}', platformPackage);
 }
 
 async function download(srcUrl: string, destPath: string,
