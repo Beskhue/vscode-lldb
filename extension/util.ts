@@ -168,16 +168,16 @@ export function waitForPattern(
 ): Promise<RegExpExecArray> {
     return new Promise<RegExpExecArray>((resolve, reject) => {
         let promisePending = true;
-        let prcoessOutput = '';
+        let processOutput = '';
         // Wait for expected pattern in channel.
         channel.on('data', (chunk) => {
             let chunkStr = chunk.toString();
             if (promisePending) {
-                prcoessOutput += chunkStr;
-                let match = pattern.exec(prcoessOutput);
+                processOutput += chunkStr;
+                let match = pattern.exec(processOutput);
                 if (match) {
                     clearTimeout(timer);
-                    prcoessOutput = null;
+                    processOutput = null;
                     promisePending = false;
                     resolve(match);
                 }
@@ -194,7 +194,7 @@ export function waitForPattern(
                 process.kill();
                 let err = Error('The debugger did not start within the allotted time.');
                 (<any>err).code = 'Timeout';
-                (<any>err).stdout = prcoessOutput;
+                (<any>err).stdout = processOutput;
                 promisePending = false;
                 reject(err);
             }
@@ -204,7 +204,7 @@ export function waitForPattern(
             if (promisePending) {
                 let err = Error('The debugger exited without completing startup handshake.');
                 (<any>err).code = 'Handshake';
-                (<any>err).stdout = prcoessOutput;
+                (<any>err).stdout = processOutput;
                 promisePending = false;
                 reject(err);
             }
