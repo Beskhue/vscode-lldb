@@ -239,7 +239,7 @@ jobs:
       artifactName: 'vscode-lldb'
 
   - script: |
-      build/lldb/bin/lldb --version
+      build\lldb\bin\lldb --version
     displayName: 'Warmup'
 
   - script: |
