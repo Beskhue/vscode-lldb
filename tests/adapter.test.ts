@@ -2,9 +2,9 @@ import * as assert from 'assert';
 import * as path from 'path';
 import * as cp from 'child_process';
 import * as fs from 'fs';
-import * as os from 'os';
+import * as net from 'net';
 import * as stream from 'stream';
-import { format, promisify, inspect } from 'util';
+import { inspect } from 'util';
 import { DebugClient } from 'vscode-debugadapter-testsupport';
 import { DebugProtocol as dp } from 'vscode-debugprotocol';
 import { WritableStream } from 'memory-streams';
@@ -247,18 +247,18 @@ suite('Adapter tests', () => {
 
             for (let i = 1; i < 10; ++i) {
                 let waitForStopAsync = ds.waitForStopEvent();
-                log('%i: continue', i);
+                log(`${i}: continue`);
                 await ds.continueRequest({ threadId: 0 });
 
-                log('%i: waiting for stop', i);
+                log(`${i}: waiting for stop`);
                 let stoppedEvent = await waitForStopAsync;
                 let frameId = await ds.getTopFrameId(stoppedEvent.body.threadId);
 
-                log('%i: evaluate', i);
+                log(`${i}: evaluate`);
                 let response1 = await ds.evaluateRequest({ expression: "s1.d", frameId: frameId, context: "watch" });
                 let response2 = await ds.evaluateRequest({ expression: "s2.d", frameId: frameId, context: "watch" });
 
-                log('%i: compareVariables', i);
+                log(`${i}: compareVariables`);
                 await ds.compareVariables(response1.body.variablesReference, { '[0]': i, '[1]': i, '[2]': i, '[3]': i });
                 await ds.compareVariables(response2.body.variablesReference, { '[0]': i * 10, '[1]': i * 10, '[2]': i * 10, '[3]': i * 10 });
             }
@@ -484,7 +484,7 @@ class DebugTestSession extends DebugClient {
         } else {
             if (useAdapter2) {
                 let codelldb = path.join(extensionRoot, 'adapter2/codelldb');
-                log('Launching adapter: %s', codelldb);
+                log(`Launching adapter: ${codelldb}`);
                 session.adapter = cp.spawn(codelldb, ['--lldb=lldb'], {
                     stdio: ['ignore', 'pipe', 'pipe'],
                     cwd: extensionRoot,
@@ -496,21 +496,23 @@ class DebugTestSession extends DebugClient {
                     lldb = process.env.LLDB_EXECUTABLE;
                 }
                 let params = { logLevel: 0 };
+                let params64 = new Buffer(JSON.stringify(params)).toString('base64');
+                let adapterPath = path.join(extensionRoot, 'adapter');
                 let args = ['-b', '-Q',
-                    '-O', format('command script import \'%s\'', path.join(extensionRoot, 'adapter')),
-                    '-O', format('script adapter.run_tcp_session(0 ,\'%s\')', new Buffer(JSON.stringify(params)).toString('base64'))
+                    '-O', `command script import '${adapterPath}'`,
+                    '-O', `script adapter.run_tcp_session(0 ,'${params64}')`
                 ]
-                log('Launching adapter: %s', lldb);
+                log(`Launching adapter: ${lldb}`);
                 session.adapter = cp.spawn(lldb, args, {
                     stdio: ['ignore', 'pipe', 'pipe'],
                     cwd: extensionRoot,
                 });
             }
 
-            session.adapter.on('error', (err) => log('Adapter error: %s', err));
+            session.adapter.on('error', (err) => log(`Adapter error: ${err}`));
             session.adapter.on('exit', (code, signal) => {
                 if (code != 0)
-                    log('Adapter exited with code %i, signal=%s', code, signal);
+                    log(`Adapter exited with code ${code}, signal=${signal}`);
             });
 
             session.adapter.stdout.pipe(logStream);
@@ -521,6 +523,10 @@ class DebugTestSession extends DebugClient {
             session.port = parseInt(match[1]);
         }
         await session.start(session.port);
+        let socket = <net.Socket>((<any>session)._socket);
+        socket.on('data', buffer => {
+            testLog.write(`--> ${buffer}\n`)
+        });
         return session;
     }
 
@@ -554,7 +560,7 @@ class DebugTestSession extends DebugClient {
             breakpoints: [{ line: line, column: 0, condition: condition }],
         });
         let bp = breakpointResp.body.breakpoints[0];
-        log("Received setBreakpoint response: %s", inspect(bp));
+        log(`Received setBreakpoint response: ${inspect(bp)}`);
         assert.ok(bp.verified);
         assert.equal(bp.line, line);
         return breakpointResp;
@@ -609,16 +615,16 @@ class DebugTestSession extends DebugClient {
                 // Just check that the value exists
             } else if (typeof expectedValue == 'string') {
                 assert.equal(variable.value, expectedValue,
-                    format('"%s": expected: "%s", actual: "%s"', keyPath, expectedValue, variable.value));
+                    `"${keyPath}": expected: "${expectedValue}", actual: "${variable.value}"`);
             } else if (typeof expectedValue == 'number') {
                 let numValue = parseFloat(variable.value);
                 assert.equal(numValue, expectedValue,
-                    format('"%s": expected: %d, actual: %d', keyPath, numValue, expectedValue));
+                    `"${keyPath}": expected: ${expectedValue}, actual: ${numValue}`);
             } else if (typeof expectedValue == 'object') {
                 let summary = expectedValue['$'];
                 if (summary != undefined) {
                     assert.equal(variable.value, summary,
-                        format('Summary of "%s", expected: "%s", actual: "%s"', keyPath, summary, variable.value));
+                        `Summary of "${keyPath}", expected: "${summary}", actual: "${variable.value}"`);
                 }
                 await this.compareVariables(variable.variablesReference, expectedValue, keyPath);
             } else {
@@ -694,14 +700,12 @@ function leftPad(s: string, p: string, n: number): string {
     return s;
 }
 
-function log(fmt: string, ...params: any[]) {
+function log(message: string) {
     let d = new Date();
-    let message = format(fmt, ...params);
-    let line = format('[%s:%s:%s] %s\n',
-        leftPad(d.getHours().toString(), '0', 2),
-        leftPad(d.getMinutes().toString(), '0', 2),
-        leftPad(d.getSeconds().toString(), '0', 2),
-        message);
+    let line =
+        `[${leftPad(d.getHours().toString(), '0', 2)}` +
+        `:${leftPad(d.getMinutes().toString(), '0', 2)}` +
+        `:${leftPad(d.getSeconds().toString(), '0', 2)}] ${message}\n`;
     testLog.write(line);
 }
 
