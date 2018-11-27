@@ -633,19 +633,33 @@ class DebugTestSession extends DebugClient {
         }
     }
 
-    async waitForStopEvent(): Promise<dp.StoppedEvent> {
-        for (; ;) {
-            let event = <dp.StoppedEvent>await this.waitForEvent('stopped');
-            // In some LLDB versions, debuggee starts out in a 'stopped' state,
-            // then eventually gets resumed after debugger initialization is complete.
-            // This initial stopped event interferes with our tests that await stop on a breakpoint.
-            // Its distinguishing feature of initial stop is that the threadId is not set, so we use
-            // that fact to ignore them.
-            if (event.body.reason != 'initial') {
-                return event;
-            }
-            log('Ignored "initial" event');
-        }
+    waitForStopEvent(): Promise<dp.StoppedEvent> {
+        let session = this;
+        return new Promise<dp.StoppedEvent>(resolve => {
+            let handler = (event: dp.StoppedEvent) => {
+                if (event.body.reason != 'initial') {
+                    session.removeListener('stopped', handler);
+                    resolve(event);
+                } else {
+                    log('Ignored "initial" event');
+                }
+            };
+            session.addListener('stopped', handler);
+        });
+        // let handler = (event) =>
+        // this.addListener('stopped')
+        // for (; ;) {
+        //     let event = <dp.StoppedEvent>await this.waitForEvent('stopped');
+        //     // In some LLDB versions, debuggee starts out in a 'stopped' state,
+        //     // then eventually gets resumed after debugger initialization is complete.
+        //     // This initial stopped event interferes with our tests that await stop on a breakpoint.
+        //     // Its distinguishing feature of initial stop is that the threadId is not set, so we use
+        //     // that fact to ignore them.
+        //     if (event.body.reason != 'initial') {
+        //         return event;
+        //     }
+        //     log('Ignored "initial" event');
+        // }
     }
 
     async launchAndWaitForStop(launchArgs: any): Promise<dp.StoppedEvent> {
@@ -702,11 +716,10 @@ function leftPad(s: string, p: string, n: number): string {
 
 function log(message: string) {
     let d = new Date();
-    let line =
-        `[${leftPad(d.getHours().toString(), '0', 2)}` +
-        `:${leftPad(d.getMinutes().toString(), '0', 2)}` +
-        `:${leftPad(d.getSeconds().toString(), '0', 2)}] ${message}\n`;
-    testLog.write(line);
+    let hh = leftPad(d.getHours().toString(), '0', 2);
+    let mm = leftPad(d.getMinutes().toString(), '0', 2);
+    let ss = leftPad(d.getSeconds().toString(), '0', 2);
+    testLog.write(`[${hh}:${mm}:${ss}] ${message}`);
 }
 
 function dumpLogs(dest: stream.Writable) {
