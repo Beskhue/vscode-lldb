@@ -239,6 +239,10 @@ jobs:
       artifactName: 'vscode-lldb'
 
   - script: |
+      build/lldb/bin/lldb --version
+    displayName: 'Warmup'
+
+  - script: |
       $(setenvWindows)
       set ADAPTER_LOG=%TEMP%\adapter.test.log
       cmake --build build --target test_adapter_gnu
