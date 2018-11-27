@@ -499,6 +499,7 @@ class DebugTestSession extends DebugClient {
                 let params64 = new Buffer(JSON.stringify(params)).toString('base64');
                 let adapterPath = path.join(extensionRoot, 'adapter');
                 let args = ['-b', '-Q',
+                    '-O', 'log enable lldb script api commands formatters',
                     '-O', `command script import '${adapterPath}'`,
                     '-O', `script adapter.run_tcp_session(0 ,'${params64}')`
                 ]
