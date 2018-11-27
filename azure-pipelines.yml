@@ -58,6 +58,7 @@ jobs:
       cmake -E copy build/vscode-lldb-portable.vsix $(Build.ArtifactStagingDirectory)/vscode-lldb-portable.vsix
       cmake --build build --target vsix_full
       cmake -E copy build/vscode-lldb-full.vsix $(Build.ArtifactStagingDirectory)/vscode-lldb-linux.vsix
+      cmake -E copy build/package.json $(Build.ArtifactStagingDirectory)/package.json
     displayName: 'Build'
 
   - task: PublishBuildArtifacts@1
