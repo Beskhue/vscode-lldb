@@ -12,21 +12,13 @@ const MaxRedirects = 10;
 const readFileAsync = promisify(fs.readFile);
 const existsAsync = promisify(fs.exists);
 
-export async function installPlatformPackageIfNeeded(
-    folder: WorkspaceFolder | undefined,
-    context: ExtensionContext,
-    output: OutputChannel): Promise<boolean> {
-
-    let lldbConfig = workspace.getConfiguration('lldb', folder ? folder.uri : null);
-    let adapterType = lldbConfig.get('adapterType');
-    if (adapterType != 'classic2' && adapterType != 'native')
-        return true;
+export async function ensurePlatformPackage(context: ExtensionContext, output: OutputChannel): Promise<boolean> {
 
     if (await existsAsync(path.join(context.extensionPath, 'lldb/bin')))
         return true;
 
     let choice = await window.showInformationMessage(
-        'The selected configuration settings require installation of platform-specific files.',
+        'The selected debug adapter type requires installation of platform-specific files.',
         { modal: true },
         { title: 'Download and install automatically', id: 'auto' },
         { title: 'Open URL in a browser', id: 'manual' }

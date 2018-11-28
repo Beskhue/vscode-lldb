@@ -42,7 +42,10 @@ export async function startDebugAdapter(
     let adapterType = config.get('adapterType');
     let adapterArgs: string[];
     let adapterExe: string;
-    let adapterEnv: Dict<string> = config.get('executable_env', {});
+    let adapterEnv: Dict<string> = config.get('adapterEnv', null);
+    if (!adapterEnv)
+        adapterEnv = config.get('executable_env', {}); // legacy
+
     if (adapterType != 'native') {
         // Classic
         if (config.get('verboseLogging', false))
@@ -65,7 +68,10 @@ export async function startDebugAdapter(
         // Native
         if (config.get('verboseLogging', false))
             adapterEnv.RUST_LOG = 'error,codelldb=debug';
-        adapterArgs = ["--lldb=" + path.join(context.extensionPath, 'lldb')];
+        let liblldb = config.get('liblldb');
+        if (!liblldb)
+            liblldb = path.join(context.extensionPath, 'lldb')
+        adapterArgs = ["--lldb=" + liblldb];
         adapterExe = path.join(context.extensionPath, 'adapter2/codelldb');
     }
     let adapter = spawnDebugger(adapterArgs, adapterExe, adapterEnv);

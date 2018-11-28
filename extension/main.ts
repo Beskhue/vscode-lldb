@@ -93,16 +93,19 @@ class Extension implements DebugConfigurationProvider {
         launchConfig: DebugConfiguration,
         token?: CancellationToken
     ): Promise<DebugConfiguration> {
-        if (!await install.installPlatformPackageIfNeeded(folder, this.context, output))
-            throw new Error('Debugging cancelled.');
 
-        if (!this.context.globalState.get('lldb_works')) {
-            window.showInformationMessage("Since this is the first time you are starting LLDB, I'm going to run some quick diagnostics...");
-            let succeeded = await diagnostics.diagnose(output);
-            this.context.globalState.update('lldb_works', succeeded);
-            if (!succeeded) {
-                return null;
+        let lldbConfig = workspace.getConfiguration('lldb', folder ? folder.uri : undefined);
+        let adapterType = lldbConfig.get('adapterType');
+        if (adapterType == 'classic') {
+            if (!this.context.globalState.get('lldb_works')) {
+                window.showInformationMessage("Since this is the first time you are starting LLDB, I'm going to run some quick diagnostics...");
+                if (!await diagnostics.diagnose(output))
+                    return undefined;
+                this.context.globalState.update('lldb_works', true);
             }
+        } else {
+            if (!await install.ensurePlatformPackage(this.context, output))
+                return undefined;
         }
 
         output.clear();
