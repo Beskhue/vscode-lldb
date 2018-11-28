@@ -5,16 +5,21 @@ import * as os from 'os';
 import * as path from 'path';
 import { promisify } from 'util';
 import { IncomingMessage } from 'http';
-import { ExtensionContext, workspace, window, OutputChannel, Uri, commands, ProgressLocation } from 'vscode';
+import { ExtensionContext, workspace, window, OutputChannel, Uri, commands, WorkspaceFolder } from 'vscode';
 import { Writable } from 'stream';
 
 const MaxRedirects = 10;
 const readFileAsync = promisify(fs.readFile);
 const existsAsync = promisify(fs.exists);
 
-export async function installPlatformPackageIfNeeded(context: ExtensionContext, output: OutputChannel): Promise<boolean> {
-    let lldbConfig = workspace.getConfiguration('lldb');
-    if (lldbConfig.get('adapterType') != 'native' && lldbConfig.get('lldbType') != 'packaged')
+export async function installPlatformPackageIfNeeded(
+    folder: WorkspaceFolder | undefined,
+    context: ExtensionContext,
+    output: OutputChannel): Promise<boolean> {
+
+    let lldbConfig = workspace.getConfiguration('lldb', folder ? folder.uri : null);
+    let adapterType = lldbConfig.get('adapterType');
+    if (adapterType != 'classic2' && adapterType != 'native')
         return true;
 
     if (await existsAsync(path.join(context.extensionPath, 'lldb/bin')))
@@ -53,8 +58,9 @@ export async function installPlatformPackageIfNeeded(context: ExtensionContext, 
                 });
             } catch (err) {
                 let choice = await window.showErrorMessage(
-                    `Download of the platform package has failed: ${err}.\n\n` +
-                    `You can still try to download and install it manually.`,
+                    `Download of the platform package has failed.\n` +
+                    `${err}.\n\n` +
+                    `You can try to download and install it manually.`,
                     { modal: true },
                     'Open URL in a browser'
                 );
@@ -100,6 +106,9 @@ async function download(srcUrl: string, destPath: string,
             } else {
                 break;
             }
+        }
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+            reject(new Error(`HTTP status ${response.statusCode} : ${response.statusMessage}`));
         }
         if (response.headers['content-type'] != 'application/octet-stream') {
             reject(new Error('HTTP response does not contain an octet stream'));

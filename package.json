@@ -132,32 +132,19 @@
 					"default": {},
 					"scope": "resource"
 				},
-				"lldb.useAdapter2": {
-					"type": "boolean"
-				},
 				"lldb.adapterType": {
 					"description": "Which debug adapter implementtion to use.",
 					"type": "string",
 					"default": "classic",
 					"enum": [
 						"classic",
+						"classic2",
 						"native"
 					],
 					"enumDescriptions": [
-						"Use classic, Python-based, debug adapter",
-						"[beta] Use native debug adapter.  Requires one-time download of platform-specific files."
-					]
-				},
-				"lldb.lldbType": {
-					"description": "Which LLDB runtime to use.",
-					"type": "string",
-					"enum": [
-						"external",
-						"packaged"
-					],
-					"enumDescriptions": [
-						"Use existing LLDB installation on this machine.",
-						"[beta] Use LLDB provided by this extension.  Requires one-time download of platform-specific files."
+						"Use classic Python-based debug adapter",
+						"[Beta] Use Python-based debug adapter on top of LLDB provided by this extension.  Requires one-time download of platform-specific files.",
+						"[Beta] Use native debug adapter.  Requires one-time download of platform-specific files."
 					]
 				},
 				"lldb.verboseLogging": {

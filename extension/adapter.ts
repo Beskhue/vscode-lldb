@@ -39,10 +39,11 @@ export async function startDebugAdapter(
     params: Dict<any>
 ): Promise<AdapterProcess> {
     let config = workspace.getConfiguration('lldb', folder ? folder.uri : undefined);
+    let adapterType = config.get('adapterType');
     let adapterArgs: string[];
     let adapterExe: string;
     let adapterEnv: Dict<string> = config.get('executable_env', {});
-    if (config.get('adapterType') != 'native') {
+    if (adapterType != 'native') {
         // Classic
         if (config.get('verboseLogging', false))
             params.logLevel = 0;
@@ -55,7 +56,7 @@ export async function startDebugAdapter(
             '-O', `command script import '${path.join(context.extensionPath, 'adapter')}'`,
             '-O', `script adapter.run_tcp_session(0, '${paramsBase64}')`
         ];
-        if (config.get('lldbType') != 'packaged') {
+        if (adapterType != 'classic2') {
             adapterExe = config.get('executable', 'lldb');
         } else {
             adapterExe = path.join(context.extensionPath, 'lldb/bin/lldb');

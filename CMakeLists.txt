@@ -86,11 +86,12 @@ set(PackagedFilesPortable
     README.md
     CHANGELOG.md
     MANUAL.md
+    adapter/**/*.py
     formatters/*
     images/*
     syntaxes/*
     extension/*.js
-    adapter/**/*.py
+    node_modules/**/*.js
 )
 
 set(PackagedFilesFull
@@ -172,7 +173,7 @@ set(MochaCommand "${CMAKE_SOURCE_DIR}/node_modules/.bin/mocha${NodeProgExt}"
     --timeout 30000
     --exit
     --require source-map-support/register
-    #-g "stop on entry"
+    -g "to the end"
     ${CMAKE_BINARY_DIR}/tests/tests
 )
 

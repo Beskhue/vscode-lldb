@@ -93,7 +93,7 @@ class Extension implements DebugConfigurationProvider {
         launchConfig: DebugConfiguration,
         token?: CancellationToken
     ): Promise<DebugConfiguration> {
-        if (!await install.installPlatformPackageIfNeeded(this.context, output))
+        if (!await install.installPlatformPackageIfNeeded(folder, this.context, output))
             throw new Error('Debugging cancelled.');
 
         if (!this.context.globalState.get('lldb_works')) {
