@@ -247,13 +247,17 @@ export async function readRegistry(path: string, value?: string): Promise<String
         });
         reg.on('error', (err) => reject(err));
         let stdout = '';
-        reg.on('data', chunk => stdout += chunk.toString());
+        reg.stdout.on('data', chunk => stdout += chunk.toString());
         reg.on('exit', code => {
             if (code != 0) {
                 reject(new Error(`Registry read failed: ${code}`));
             } else {
-                let val = stdout.split(' ', 3)[2];
-                resolve(val);
+                let m = /REG_SZ\s+(.*)/.exec(stdout);
+                if (m) {
+                    resolve(m[1]);
+                } else {
+                    reject(new Error('Registry read failed'));
+                }
             }
         });
     });
