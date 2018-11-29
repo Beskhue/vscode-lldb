@@ -98,7 +98,8 @@ set(PackagedFilesFull
     ${PackagedFilesPortable}
     adapter2/*.py
     adapter2/codelldb
-    adapter2/libcodelldb.so*
+    adapter2/libcodelldb.so
+    adapter2/libcodelldb.dylib
     adapter2/codelldb.exe
     adapter2/codelldb.dll
     lldb/bin/**/*
