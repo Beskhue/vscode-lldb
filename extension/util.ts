@@ -234,7 +234,7 @@ export async function findFileByPattern(path: string, pattern: RegExp): Promise<
     return null;
 }
 
-export async function readRegistry(path: string, value?: string): Promise<String> {
+export async function readRegistry(path: string, value?: string): Promise<string> {
     return new Promise<string>((resolve, reject) => {
         let args = ['query', path];
         if (value != null)

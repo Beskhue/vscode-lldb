@@ -74,13 +74,18 @@ export async function startDebugAdapter(
             liblldb = await findLiblldb(path.join(context.extensionPath, 'lldb'));
         }
         adapterArgs = ['--preload-global', liblldb];
-        // On Windows, try to locate Python installation, add it to PATH and tell codelldb to preload the python dll.
+
         if (process.platform == 'win32') {
-            try {
-                let pythonPath = await util.readRegistry('HKLM\\Software\\Python\\PythonCore\\3.6\\InstallPath', null);
-                adapterEnv['PATH'] = `${adapterEnv['PATH']};${pythonPath}`;
-                adapterArgs = adapterArgs.concat('--preload', 'python36.dll');
-            } catch (err) { }
+            // Add liblldb's directory to PATH
+            let extraPath = [path.dirname(liblldb)];
+            // Try to locate Python installation, add it to PATH and tell codelldb to preload the python dll.
+            let pythonPath = await util.readRegistry('HKLM\\Software\\Python\\PythonCore\\3.6\\InstallPath', null);
+            if (pythonPath)
+                extraPath.push(pythonPath);
+            // liblldb will need python36.dll anyways, and we can provide a better error message
+            //adapterArgs = adapterArgs.concat('--preload', 'python36.dll');
+
+            adapterEnv['PATH'] = process.env['PATH'] + ';' + extraPath.join(';');
         }
         adapterExe = path.join(context.extensionPath, 'adapter2/codelldb');
     }
