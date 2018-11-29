@@ -66,12 +66,15 @@ export async function startDebugAdapter(
         }
     } else {
         // Native
-        if (config.get('verboseLogging', false))
+        let pythonPath = readRegistry('HKLM\\Software\\Python\\PythonCore\\3.6\\InstallPath', null);
+        if (config.get('verboseLogging', false)) {
             adapterEnv.RUST_LOG = 'error,codelldb=debug';
+        }
         let liblldb = config.get('liblldb');
-        if (!liblldb)
+        if (!liblldb) {
             liblldb = path.join(context.extensionPath, 'lldb')
-        adapterArgs = ["--lldb=" + liblldb];
+        }
+        adapterArgs = ["--preload-global=" + liblldb];
         adapterExe = path.join(context.extensionPath, 'adapter2/codelldb');
     }
     let adapter = spawnDebugger(adapterArgs, adapterExe, adapterEnv);
@@ -112,4 +115,29 @@ export function spawnDebugger(args: string[], adapterPath: string, adapterEnv: D
         options.env['PATH'] = '/usr/bin:' + process.env['PATH'];
     }
     return cp.spawn(adapterPath, args, options);
+}
+
+async function readRegistry(path: string, value?: string): Promise<String> {
+    return new Promise<string>((resolve, reject) => {
+        let args = ['query', path];
+        if (value != null)
+            args.push('/v', value);
+        else
+            args.push('/ve');
+
+        let reg = cp.spawn('reg.exe', args, {
+            stdio: ['ignore', 'pipe', 'ignore'],
+        });
+        reg.on('error', (err) => reject(err));
+        let stdout = '';
+        reg.on('data', chunk => stdout += chunk.toString());
+        reg.on('exit', code => {
+            if (code != 0) {
+                reject(new Error(`Registry read failed: ${code}`));
+            } else {
+                let val = stdout.split(' ', 3)[2];
+                resolve(val);
+            }
+        });
+    });
 }

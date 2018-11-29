@@ -1,73 +1,34 @@
 extern crate clap;
 extern crate env_logger;
 extern crate failure;
-extern crate globset;
-extern crate walkdir;
 
-use self::loading::*;
 use clap::{App, Arg};
-use globset::*;
 use std::env;
 use std::mem;
-use std::path;
+use std::path::Path;
+
+use self::loading::*;
 
 fn main() -> Result<(), failure::Error> {
     env_logger::Builder::from_default_env().init();
 
     let matches = App::new("codelldb")
-        .arg(Arg::with_name("lldb").long("lldb").takes_value(true).required(true))
         .arg(Arg::with_name("port").long("port").takes_value(true))
         .arg(Arg::with_name("multi-session").long("multi-session"))
+        .arg(Arg::with_name("preload-global").long("preload-global").multiple(true).takes_value(true))
+        .arg(Arg::with_name("preload").long("preload").multiple(true).takes_value(true))
         .get_matches();
 
     let multi_session = matches.is_present("multi-session");
     let port = matches.value_of("port").map(|s| s.parse().unwrap()).unwrap_or(0);
-    let mut liblldb_path: path::PathBuf = matches.value_of("lldb").unwrap().into();
-
-    if liblldb_path.is_dir() {
-        let mut builder = GlobSetBuilder::new();
-        if cfg!(windows) {
-            builder.add(Glob::new("**/bin/liblldb.dll").unwrap());
-            builder.add(Glob::new("**/bin/liblldb.*.dll").unwrap());
-        } else if cfg!(target_os = "macos") {
-            builder.add(Glob::new("**/lib/liblldb.dylib").unwrap());
-            builder.add(Glob::new("**/lib/liblldb.*.dylib").unwrap());
-        } else {
-            builder.add(Glob::new("**/lib/liblldb.so").unwrap());
-            builder.add(Glob::new("**/lib/liblldb.so.*").unwrap());
-        }
-        let matcher = builder.build().unwrap();
-        let mut found = None;
-        for entry in walkdir::WalkDir::new(&liblldb_path).follow_links(true).max_depth(2) {
-            let entry = entry?;
-            if matcher.is_match(entry.path()) {
-                found = Some(entry.into_path());
-                break;
-            }
-        }
-        liblldb_path = match found {
-            Some(path) => path,
-            None => panic!("Can't find liblldb in {:?}", liblldb_path),
-        }
-    }
 
     unsafe {
-        if cfg!(windows) {
-            // Append liblldb's directory to the PATH, so that it can find msdiaxxx.dll later.
-            let mut path = env::var_os("PATH").unwrap();
-            path.push(";");
-            path.push(liblldb_path.parent().unwrap());
-            env::set_var("PATH", path);
-
-            // Pre-load python shared lib, because liblldb will need it anyways, and we can produce
-            // a better error message in case it can't be found.
-            load_library(path::Path::new("python36.dll"), false);
+        for dylib in matches.values_of("preload-global").unwrap_or_default() {
+            load_library(Path::new(dylib), true);
         }
-
-        // Load liblldb with RTLD_GLOBAL option, so that when we load codelldb,
-        // its symbol referenes will get resolved using this instalce of liblldb.
-        load_library(&liblldb_path, true);
-
+        for dylib in matches.values_of("preload").unwrap_or_default() {
+            load_library(Path::new(dylib), false);
+        }
         // Load codelldb shared lib
         let mut codelldb_path = env::current_exe()?;
         codelldb_path.pop();
