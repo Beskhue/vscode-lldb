@@ -40,7 +40,7 @@ export async function startDebugAdapter(
 ): Promise<AdapterProcess> {
     let config = workspace.getConfiguration('lldb', folder ? folder.uri : undefined);
     let adapterType = config.get('adapterType');
-    let adapterArgs: string[];
+    let adapterArgs: string[] = [];
     let adapterExe: string;
     let adapterEnv: Dict<string> = config.get('adapterEnv', null);
     if (!adapterEnv)
@@ -66,15 +66,22 @@ export async function startDebugAdapter(
         }
     } else {
         // Native
-        let pythonPath = readRegistry('HKLM\\Software\\Python\\PythonCore\\3.6\\InstallPath', null);
         if (config.get('verboseLogging', false)) {
-            adapterEnv.RUST_LOG = 'error,codelldb=debug';
+            adapterEnv['RUST_LOG'] = 'error,codelldb=debug';
         }
-        let liblldb = config.get('liblldb');
+        let liblldb = config.get<string>('liblldb');
         if (!liblldb) {
-            liblldb = path.join(context.extensionPath, 'lldb')
+            liblldb = await findLiblldb(path.join(context.extensionPath, 'lldb'));
         }
-        adapterArgs = ["--preload-global=" + liblldb];
+        adapterArgs = ['--preload-global', liblldb];
+        // On Windows, try to locate Python installation, add it to PATH and tell codelldb to preload the python dll.
+        if (process.platform == 'win32') {
+            try {
+                let pythonPath = await util.readRegistry('HKLM\\Software\\Python\\PythonCore\\3.6\\InstallPath', null);
+                adapterEnv['PATH'] = `${adapterEnv['PATH']};${pythonPath}`;
+                adapterArgs = adapterArgs.concat('--preload', 'python36.dll');
+            } catch (err) { }
+        }
         adapterExe = path.join(context.extensionPath, 'adapter2/codelldb');
     }
     let adapter = spawnDebugger(adapterArgs, adapterExe, adapterEnv);
@@ -109,7 +116,7 @@ export function spawnDebugger(args: string[], adapterPath: string, adapterEnv: D
         env: env,
         cwd: workspace.rootPath
     };
-    if (process.platform.includes('darwin')) {
+    if (process.platform == 'darwin') {
         // Make sure LLDB finds system Python before Brew Python
         // https://github.com/Homebrew/legacy-homebrew/issues/47201
         options.env['PATH'] = '/usr/bin:' + process.env['PATH'];
@@ -117,27 +124,24 @@ export function spawnDebugger(args: string[], adapterPath: string, adapterEnv: D
     return cp.spawn(adapterPath, args, options);
 }
 
-async function readRegistry(path: string, value?: string): Promise<String> {
-    return new Promise<string>((resolve, reject) => {
-        let args = ['query', path];
-        if (value != null)
-            args.push('/v', value);
-        else
-            args.push('/ve');
+async function findLiblldb(lldbRoot: string): Promise<string | null> {
+    let dir;
+    let pattern;
+    if (process.platform == 'linux') {
+        dir = path.join(lldbRoot, 'lib');
+        pattern = /liblldb\.so.*/;
+    } else if (process.platform == 'darwin') {
+        dir = path.join(lldbRoot, 'lib');
+        pattern = /liblldb\..*dylib/;
+    } else if (process.platform == 'win32') {
+        dir = path.join(lldbRoot, 'bin');
+        pattern = /liblldb\..*dll/;
+    }
 
-        let reg = cp.spawn('reg.exe', args, {
-            stdio: ['ignore', 'pipe', 'ignore'],
-        });
-        reg.on('error', (err) => reject(err));
-        let stdout = '';
-        reg.on('data', chunk => stdout += chunk.toString());
-        reg.on('exit', code => {
-            if (code != 0) {
-                reject(new Error(`Registry read failed: ${code}`));
-            } else {
-                let val = stdout.split(' ', 3)[2];
-                resolve(val);
-            }
-        });
-    });
+    let file = await util.findFileByPattern(dir, pattern);
+    if (file) {
+        return path.join(dir, file);
+    } else {
+        return null;
+    }
 }

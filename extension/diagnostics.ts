@@ -18,9 +18,9 @@ export async function diagnose(output: OutputChannel): Promise<boolean> {
         output.appendLine('--- Checking version ---');
         let versionPattern = '^lldb version ([0-9.]+)';
         let desiredVersion = '3.9.1';
-        if (process.platform.includes('win32')) {
+        if (process.platform == 'win32') {
             desiredVersion = '4.0.0';
-        } else if (process.platform.includes('darwin')) {
+        } else if (process.platform == 'darwin') {
             versionPattern = '^lldb-([0-9.]+)';
             desiredVersion = '360.1.68';
         }
@@ -34,7 +34,7 @@ export async function diagnose(output: OutputChannel): Promise<boolean> {
         // Try to locate LLDB and get its version.
         let version: string = null;
         let lldbNames: string[];
-        if (process.platform.includes('linux')) {
+        if (process.platform == 'linux') {
             // Linux tends to have versioned binaries only.
             lldbNames = ['lldb', 'lldb-10.0', 'lldb-9.0', 'lldb-8.0', 'lldb-7.0',
                 'lldb-6.0', 'lldb-5.0', 'lldb-4.0', 'lldb-3.9'];

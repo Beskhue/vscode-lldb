@@ -1,10 +1,14 @@
 import { QuickPickItem, WorkspaceConfiguration, DebugConfiguration, OutputChannel } from 'vscode';
 import * as cp from 'child_process';
 import * as stream from 'stream';
+import * as fs from 'fs';
+import { promisify } from 'util';
 
 export interface Dict<T> {
     [key: string]: T;
 }
+
+const readdirAsync = promisify(fs.readdir);
 
 let expandVarRegex = /\$\{(?:([^:}]+):)?([^}]+)\}/g;
 
@@ -218,5 +222,39 @@ export function logProcessOutput(process: cp.ChildProcess, output: OutputChannel
     });
     process.stderr.on('data', (chunk) => {
         output.append(chunk.toString());
+    });
+}
+
+export async function findFileByPattern(path: string, pattern: RegExp): Promise<string|null> {
+    let files = await readdirAsync(path);
+    for (let file of files) {
+        if (pattern.test(file))
+            return file;
+    }
+    return null;
+}
+
+export async function readRegistry(path: string, value?: string): Promise<String> {
+    return new Promise<string>((resolve, reject) => {
+        let args = ['query', path];
+        if (value != null)
+            args.push('/v', value);
+        else
+            args.push('/ve');
+
+        let reg = cp.spawn('reg.exe', args, {
+            stdio: ['ignore', 'pipe', 'ignore'],
+        });
+        reg.on('error', (err) => reject(err));
+        let stdout = '';
+        reg.on('data', chunk => stdout += chunk.toString());
+        reg.on('exit', code => {
+            if (code != 0) {
+                reject(new Error(`Registry read failed: ${code}`));
+            } else {
+                let val = stdout.split(' ', 3)[2];
+                resolve(val);
+            }
+        });
     });
 }

@@ -24,7 +24,6 @@ globset = "0.4.0"
 superslice = "0.1.0"
 lazy_static = "1.1.0"
 clap = "2.32.0"
-walkdir = "2.2.7"
 
 [lib]
 crate-type = ["cdylib"]
