@@ -173,7 +173,7 @@ set(MochaCommand "${CMAKE_SOURCE_DIR}/node_modules/.bin/mocha${NodeProgExt}"
     --timeout 30000
     --exit
     --require source-map-support/register
-    -g "to the end"
+    #-g "to the end"
     ${CMAKE_BINARY_DIR}/tests/tests
 )
 

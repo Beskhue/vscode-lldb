@@ -49,7 +49,9 @@ jobs:
       $(setenvLinux)
       mkdir build
       cd build
-      cmake -DLLDB_ROOT=$(Agent.WorkFolder)/D/lldb-linux ..
+      cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo\
+            -DLLDB_ROOT=$(Agent.WorkFolder)/D/lldb-linux\
+            ..
     displayName: 'Configure'
 
   - script: |
@@ -127,7 +129,9 @@ jobs:
       $(setenvOSX)
       mkdir build
       cd build
-      cmake -DLLDB_ROOT=$(Agent.WorkFolder)/D/lldb-osx ..
+      cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo\
+            -DLLDB_ROOT=$(Agent.WorkFolder)/D/lldb-osx\
+            ..
     displayName: 'Configure'
 
   - script: |
@@ -221,6 +225,7 @@ jobs:
       mkdir build
       cd build
       cmake -GNinja^
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo^
             -DLLDB_ROOT=$(Agent.WorkFolder)\D\lldb-windows^
             -DCMAKE_C_COMPILER=cl^
             -DCMAKE_CXX_COMPILER=cl^

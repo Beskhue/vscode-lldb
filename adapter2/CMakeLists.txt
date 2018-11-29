@@ -5,8 +5,12 @@ add_copy_files(codelldb_python
           ${CMAKE_SOURCE_DIR}/formatters/rust.py
 )
 
+if (CMAKE_BUILD_TYPE MATCHES Release|RelWithDebInfo )
+    set(CargoFlags --release)
+endif()
+
 add_custom_target(codelldb ALL
     DEPENDS codelldb_python lldb
-    COMMAND ${CMAKE_COMMAND} -E env LLDB_ROOT=${LLDB_ROOT} cargo build -Zunstable-options --out-dir=${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${CMAKE_COMMAND} -E env LLDB_ROOT=${LLDB_ROOT} cargo build ${CargoFlags} -Zunstable-options --out-dir=${CMAKE_CURRENT_BINARY_DIR}
     COMMENT "Running cargo build"
 )
