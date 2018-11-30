@@ -10,7 +10,6 @@ import { DebugProtocol as dp } from 'vscode-debugprotocol';
 import { WritableStream } from 'memory-streams';
 
 import * as adapter from '../extension/adapter';
-import * as util from '../extension/util';
 
 const triple = process.env.TARGET_TRIPLE || '';
 const useAdapter2 = !!process.env.USE_ADAPTER2;
