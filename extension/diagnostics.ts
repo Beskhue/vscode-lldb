@@ -46,9 +46,9 @@ export async function diagnose(output: OutputChannel): Promise<boolean> {
         }
         for (let name of lldbNames) {
             try {
-                let lldb = adapter.spawnDebugger(['-v'], name, adapterEnv);
+                let lldb = await adapter.spawnDebugAdapter(name, ['-v'], adapterEnv, workspace.rootPath);
                 util.logProcessOutput(lldb, output);
-                version = (await util.waitForPattern(lldb, lldb.stdout, pattern))[1];
+                version = (await adapter.waitForPattern(lldb, lldb.stdout, pattern))[1];
                 adapterPath = name;
                 break;
             } catch (err) {
@@ -69,14 +69,14 @@ export async function diagnose(output: OutputChannel): Promise<boolean> {
 
             // Check if Python scripting is usable.
             output.appendLine('--- Checking Python ---');
-            let lldb2 = adapter.spawnDebugger(['-b',
+            let lldb2 = await adapter.spawnDebugAdapter(adapterPath, ['-b',
                 '-O', 'script import sys, io, lldb',
                 '-O', 'script print(lldb.SBDebugger.Create().IsValid())',
                 '-O', 'script print("OK")'
-            ], adapterPath, adapterEnv);
+            ], adapterEnv, workspace.rootPath);
             util.logProcessOutput(lldb2, output);
             // [^] = match any char, including newline
-            let match2 = await util.waitForPattern(lldb2, lldb2.stdout, new RegExp('^True$[^]*^OK$', 'm'));
+            let match2 = await adapter.waitForPattern(lldb2, lldb2.stdout, new RegExp('^True$[^]*^OK$', 'm'));
         }
         output.appendLine('--- Done ---');
         output.show(true);

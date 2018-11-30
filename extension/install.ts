@@ -3,14 +3,12 @@ import * as https from 'https';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { promisify } from 'util';
 import { IncomingMessage } from 'http';
 import { ExtensionContext, workspace, window, OutputChannel, Uri, commands, WorkspaceFolder } from 'vscode';
 import { Writable } from 'stream';
+import {readFileAsync, existsAsync } from './async';
 
 const MaxRedirects = 10;
-const readFileAsync = promisify(fs.readFile);
-const existsAsync = promisify(fs.exists);
 
 export async function ensurePlatformPackage(context: ExtensionContext, output: OutputChannel): Promise<boolean> {
 

@@ -12,74 +12,77 @@
     {
       "label": "extension",
       "group": "build",
-      "problemMatcher": "$tsc"
-    },
-    {
-      "label": "tests",
-      "group": "build"
-    },
-    {
-      "label": "lldb",
-      "group": "build"
-    },
-    {
-      "label": "adapter",
-      "group": "build"
-    },
-    {
-      "label": "codelldb",
-      "group": "build"
-    },
-    {
-      "label": "debuggee",
-      "group": "build"
-    },
-    {
-      "label": "cargo check",
-      "command": "cargo",
-      "args": [
-        "check"
-      ],
-      "presentation": {
-        "clear": true
+      "problemMatcher": {
+          "base": "$tsc",
+          "fileLocation": ["relative", "${workspaceFolder}/build/extension"]
+        },
       },
-      "problemMatcher": [
-        "$rustc"
-      ],
-      "group": "build"
-    },
-    {
-      "label": "cargo test",
-      "command": "cargo",
-      "args": [
-        "test",
-        "--package=codelldb"
-      ],
-      "options": {
-        "env": {
-          "PATH": "${env:PATH};${workspaceFolder}/build/lldb/bin"
-        }
+      {
+        "label": "tests",
+        "group": "build"
       },
-      "group": "build"
-    },
-    {
-      "type": "shell",
-      "label": "Start extension host",
-      "command": "code --extensionDevelopmentPath=${workspaceRoot}/build ${workspaceRoot}/debuggee",
-      "group": "build",
-      "dependsOn": "extension",
-    },
-    {
-      "label": "vsix_extracted",
-      "group": "build",
-      "problemMatcher": "$tsc"
-    },
-    {
-      "type": "shell",
-      "label": "Start extension host on extracted vsix",
-      "command": "code --extensionDevelopmentPath=${workspaceRoot}/build/tmp/extension ${workspaceRoot}/debuggee",
-      "group": "build",
-      "dependsOn": "vsix_extracted",
-    },
-  ]
-}
+      {
+        "label": "lldb",
+        "group": "build"
+      },
+      {
+        "label": "adapter",
+        "group": "build"
+      },
+      {
+        "label": "codelldb",
+        "group": "build"
+      },
+      {
+        "label": "debuggee",
+        "group": "build"
+      },
+      {
+        "label": "cargo check",
+        "command": "cargo",
+        "args": [
+          "check"
+        ],
+        "presentation": {
+          "clear": true
+        },
+        "problemMatcher": [
+          "$rustc"
+        ],
+        "group": "build"
+      },
+      {
+        "label": "cargo test",
+        "command": "cargo",
+        "args": [
+          "test",
+          "--package=codelldb"
+        ],
+        "options": {
+          "env": {
+            "PATH": "${env:PATH};${workspaceFolder}/build/lldb/bin"
+          }
+        },
+        "group": "build"
+      },
+      {
+        "type": "shell",
+        "label": "Start extension host",
+        "command": "code --extensionDevelopmentPath=${workspaceRoot}/build ${workspaceRoot}/debuggee",
+        "group": "build",
+        "dependsOn": "extension",
+      },
+      {
+        "label": "vsix_extracted",
+        "group": "build",
+        "problemMatcher": "$tsc"
+      },
+      {
+        "type": "shell",
+        "label": "Start extension host on extracted vsix",
+        "command": "code --extensionDevelopmentPath=${workspaceRoot}/build/tmp/extension ${workspaceRoot}/debuggee",
+        "group": "build",
+        "dependsOn": "vsix_extracted",
+      },
+    ]
+  }

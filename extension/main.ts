@@ -4,13 +4,15 @@ import {
     DebugConfigurationProvider, DebugConfiguration,
 } from 'vscode';
 import { inspect } from 'util';
+import { ChildProcess } from 'child_process';
+import * as path from 'path';
 import * as diagnostics from './diagnostics';
-import * as startup from './adapter';
 import * as htmlView from './htmlView';
 import * as cargo from './cargo';
 import * as util from './util';
-import { Dict } from './util';
+import * as adapter from './adapter';
 import * as install from './install';
+import { Dict } from './util';
 
 export let output = window.createOutputChannel('LLDB');
 
@@ -154,8 +156,8 @@ class Extension implements DebugConfigurationProvider {
         try {
             // If configuration does not provide debugServer explicitly, launch new adapter.
             if (!launchConfig.debugServer) {
-                let adapter = await startup.startDebugAdapter(this.context, folder, adapterParams);
-                launchConfig.debugServer = adapter.port;
+                let [adapter, port] = await this.startDebugAdapter(folder, adapterParams);
+                launchConfig.debugServer = port;
             }
             launchConfig._displaySettings = this.context.globalState.get<DisplaySettings>('display_settings') || new DisplaySettings();
             return launchConfig;
@@ -206,6 +208,45 @@ class Extension implements DebugConfigurationProvider {
         } else {
             return undefined;
         }
+    }
+
+    async startDebugAdapter(
+        folder: WorkspaceFolder | undefined,
+        params: Dict<string>
+    ): Promise<[ChildProcess, number]> {
+        let config = workspace.getConfiguration('lldb', folder ? folder.uri : undefined);
+        let adapterType = config.get('adapterType');
+        let adapterEnv = config.get('executable_env', {});
+        let verboseLogging = config.get<boolean>('verboseLogging');
+        let adapterProcess;
+        if (adapterType == 'classic') {
+            adapterProcess = await adapter.startClassic(
+                this.context.extensionPath,
+                config.get('executable', 'lldb'),
+                adapterEnv,
+                workspace.rootPath,
+                params,
+                verboseLogging);
+        } else if (adapterType == 'classic2') {
+            adapterProcess = await adapter.startClassic(
+                this.context.extensionPath,
+                path.join(this.context.extensionPath, 'lldb/bin/lldb'),
+                adapterEnv,
+                workspace.rootPath,
+                params,
+                verboseLogging);
+        } else {
+            adapterProcess = await adapter.startNative(
+                this.context.extensionPath,
+                path.join(this.context.extensionPath, 'lldb'),
+                adapterEnv,
+                workspace.rootPath,
+                params,
+                verboseLogging);
+        };
+        util.logProcessOutput(adapterProcess, output);
+        let port = await adapter.getDebugServerPort(adapterProcess);
+        return [adapterProcess, port];
     }
 };
 

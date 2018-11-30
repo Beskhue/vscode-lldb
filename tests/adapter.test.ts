@@ -9,6 +9,7 @@ import { DebugClient } from 'vscode-debugadapter-testsupport';
 import { DebugProtocol as dp } from 'vscode-debugprotocol';
 import { WritableStream } from 'memory-streams';
 
+import * as adapter from '../extension/adapter';
 import * as util from '../extension/util';
 
 const triple = process.env.TARGET_TRIPLE || '';
@@ -482,51 +483,42 @@ class DebugTestSession extends DebugClient {
         if (process.env.DEBUG_SERVER) {
             session.port = parseInt(process.env.DEBUG_SERVER)
         } else {
-            if (useAdapter2) {
-                let codelldb = path.join(extensionRoot, 'adapter2/codelldb');
-                log(`Launching adapter: ${codelldb}`);
-                session.adapter = cp.spawn(codelldb, ['--lldb=lldb'], {
-                    stdio: ['ignore', 'pipe', 'pipe'],
-                    cwd: extensionRoot,
-                    env: Object.assign({ RUST_LOG: 'error,codelldb=debug' }, process.env)
-                });
-            } else {
+            if (!useAdapter2) {
                 let lldb = path.join(extensionRoot, 'lldb/bin/lldb');
                 if (process.env.LLDB_EXECUTABLE) {
                     lldb = process.env.LLDB_EXECUTABLE;
                 }
-                let params = { logLevel: 0 };
-                let params64 = new Buffer(JSON.stringify(params)).toString('base64');
-                let adapterPath = path.join(extensionRoot, 'adapter');
-                let args = ['-b', '-Q',
-                    '-O', 'log enable lldb script api commands',
-                    '-O', `command script import '${adapterPath}'`,
-                    '-O', `script adapter.run_tcp_session(0 ,'${params64}')`
-                ]
-                log(`Launching adapter: ${lldb}`);
-                session.adapter = cp.spawn(lldb, args, {
-                    stdio: ['ignore', 'pipe', 'pipe'],
-                    cwd: extensionRoot,
-                });
+                session.adapter = await adapter.startClassic(
+                    extensionRoot,
+                    lldb,
+                    Object.assign({ RUST_LOG: 'error,codelldb=debug' }, process.env),
+                    extensionRoot,
+                    {},
+                    true);
+            } else {
+                session.adapter = await adapter.startNative(
+                    extensionRoot,
+                    path.join(extensionRoot, 'lldb'),
+                    Object.assign({ RUST_LOG: 'error,codelldb=debug' }, process.env),
+                    extensionRoot,
+                    {},
+                    true);
             }
 
-            session.adapter.on('error', (err) => log(`Adapter error: ${err}`));
+            session.adapter.on('error', (err) => log(`Adapter error: ${err} `));
             session.adapter.on('exit', (code, signal) => {
                 if (code != 0)
-                    log(`Adapter exited with code ${code}, signal=${signal}`);
+                    log(`Adapter exited with code ${code}, signal = ${signal} `);
             });
 
             session.adapter.stdout.pipe(logStream);
             session.adapter.stderr.pipe(logStream);
-
-            let regex = new RegExp('^Listening on port (\\d+)\\s', 'm');
-            let match = await util.waitForPattern(session.adapter, session.adapter.stdout, regex, 10000);
-            session.port = parseInt(match[1]);
+            session.port = await adapter.getDebugServerPort(session.adapter);
         }
         await session.start(session.port);
         let socket = <net.Socket>((<any>session)._socket);
         socket.on('data', buffer => {
-            testLog.write(`--> ${buffer}\n`)
+            testLog.write(`-- > ${buffer} \n`)
         });
         return session;
     }
@@ -561,7 +553,7 @@ class DebugTestSession extends DebugClient {
             breakpoints: [{ line: line, column: 0, condition: condition }],
         });
         let bp = breakpointResp.body.breakpoints[0];
-        log(`Received setBreakpoint response: ${inspect(bp)}`);
+        log(`Received setBreakpoint response: ${inspect(bp)} `);
         assert.ok(bp.verified);
         assert.equal(bp.line, line);
         return breakpointResp;
@@ -620,7 +612,7 @@ class DebugTestSession extends DebugClient {
             } else if (typeof expectedValue == 'number') {
                 let numValue = parseFloat(variable.value);
                 assert.equal(numValue, expectedValue,
-                    `"${keyPath}": expected: ${expectedValue}, actual: ${numValue}`);
+                    `"${keyPath}": expected: ${expectedValue}, actual: ${numValue} `);
             } else if (typeof expectedValue == 'object') {
                 let summary = expectedValue['$'];
                 if (summary != undefined) {
@@ -647,20 +639,6 @@ class DebugTestSession extends DebugClient {
             };
             session.addListener('stopped', handler);
         });
-        // let handler = (event) =>
-        // this.addListener('stopped')
-        // for (; ;) {
-        //     let event = <dp.StoppedEvent>await this.waitForEvent('stopped');
-        //     // In some LLDB versions, debuggee starts out in a 'stopped' state,
-        //     // then eventually gets resumed after debugger initialization is complete.
-        //     // This initial stopped event interferes with our tests that await stop on a breakpoint.
-        //     // Its distinguishing feature of initial stop is that the threadId is not set, so we use
-        //     // that fact to ignore them.
-        //     if (event.body.reason != 'initial') {
-        //         return event;
-        //     }
-        //     log('Ignored "initial" event');
-        // }
     }
 
     async launchAndWaitForStop(launchArgs: any): Promise<dp.StoppedEvent> {
@@ -720,7 +698,7 @@ function log(message: string) {
     let hh = leftPad(d.getHours().toString(), '0', 2);
     let mm = leftPad(d.getMinutes().toString(), '0', 2);
     let ss = leftPad(d.getSeconds().toString(), '0', 2);
-    testLog.write(`[${hh}:${mm}:${ss}] ${message}`);
+    testLog.write(`[${hh}: ${mm}: ${ss}]${message} `);
 }
 
 function dumpLogs(dest: stream.Writable) {
@@ -730,12 +708,3 @@ function dumpLogs(dest: stream.Writable) {
     dest.write(adapterLog.toString());
     dest.write('\n------------------\n');
 }
-
-// process.on('uncaughtException', (err) => {
-//     console.error('### uncaughtException');
-//     dumpLogs();
-// });
-// process.on('unhandledRejection', (err) => {
-//     console.error('### unhandledRejection');
-//     dumpLogs();
-// });

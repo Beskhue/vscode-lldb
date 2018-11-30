@@ -15,7 +15,6 @@ fn main() -> Result<(), failure::Error> {
     let matches = App::new("codelldb")
         .arg(Arg::with_name("port").long("port").takes_value(true))
         .arg(Arg::with_name("multi-session").long("multi-session"))
-        .arg(Arg::with_name("preload-global").long("preload-global").multiple(true).takes_value(true))
         .arg(Arg::with_name("preload").long("preload").multiple(true).takes_value(true))
         .get_matches();
 
@@ -23,11 +22,8 @@ fn main() -> Result<(), failure::Error> {
     let port = matches.value_of("port").map(|s| s.parse().unwrap()).unwrap_or(0);
 
     unsafe {
-        for dylib in matches.values_of("preload-global").unwrap_or_default() {
-            load_library(Path::new(dylib), true);
-        }
         for dylib in matches.values_of("preload").unwrap_or_default() {
-            load_library(Path::new(dylib), false);
+            load_library(Path::new(dylib), true);
         }
         // Load codelldb shared lib
         let mut codelldb_path = env::current_exe()?;

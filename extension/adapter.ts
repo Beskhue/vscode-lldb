@@ -1,132 +1,164 @@
-import {
-    workspace, ExtensionContext, WorkspaceFolder, WorkspaceConfiguration
-} from 'vscode';
 import * as cp from 'child_process';
 import * as path from 'path';
+import { Readable } from 'stream';
 import * as util from './util';
 import { Dict } from './util';
-import { output } from './main';
+import { statAsync } from './async';
 
-export class AdapterProcess {
-    public isAlive: boolean;
-    public port: number;
+export async function startClassic(
+    extensionRoot: string,
+    lldbLocation: string,
+    extraEnv: Dict<string>, // extra environment to be set for adapter
+    workDir: string,
+    adapterParameters: Dict<any>, // feature parameters that should be passed on to the adapter
+    verboseLogging: boolean,
+): Promise<cp.ChildProcess> {
 
-    constructor(process: cp.ChildProcess) {
-        this.process = process;
-        this.isAlive = true;
-        process.on('exit', (code, signal) => {
-            this.isAlive = false;
-            if (signal) {
-                output.appendLine(`Adapter terminated by ${signal} signal.`);
-            }
-            if (code) {
-                output.appendLine(`Adapter exit code: ${code}`);
+    let env = mergeEnv(extraEnv);
+    if (verboseLogging) {
+        adapterParameters['logLevel'] = 0;
+    }
+    let paramsBase64 = new Buffer(JSON.stringify(adapterParameters)).toString('base64');
+    let args = ['-b',
+        '-O', `command script import '${path.join(extensionRoot, 'adapter')}'`,
+        '-O', `script adapter.run_tcp_session(0, '${paramsBase64}')`
+    ];
+    return spawnDebugAdapter(lldbLocation, args, env, workDir);
+}
+
+export async function startNative(
+    extensionRoot: string,
+    lldbLocation: string,
+    extraEnv: Dict<string>, // extra environment to be set for adapter
+    workDir: string,
+    adapterParameters: Dict<any>, // feature parameters that should be passed on to the adapter
+    verboseLogging: boolean,
+): Promise<cp.ChildProcess> {
+
+    let env = mergeEnv(extraEnv);
+    let executable = path.join(extensionRoot, 'adapter2/codelldb');
+
+    let liblldb;
+    let stats = await statAsync(lldbLocation);
+    if (stats.isFile()) {
+        liblldb = lldbLocation; // Assume it's liblldb
+    } else {
+        liblldb = await findLiblldb(lldbLocation);
+        if (!liblldb) {
+            throw new Error(`Could not locate liblldb given "${lldbLocation}"`);
+        }
+    }
+    let args = ['--preload', liblldb];
+
+    if (process.platform == 'win32') {
+        // Add liblldb's directory to PATH so it can find msdia dll later.
+        env['PATH'] = env['PATH'] + ';' + path.dirname(liblldb);
+    }
+    if (verboseLogging) {
+        env['RUST_LOG'] = 'error,codelldb=debug';
+    }
+    return spawnDebugAdapter(executable, args, env, workDir);
+}
+
+let getPythonPathAsync = process.platform == 'win32' ?
+    util.readRegistry('HKLM\\Software\\Python\\PythonCore\\3.6\\InstallPath', null) :
+    null;
+
+export async function spawnDebugAdapter(
+    executable: string,
+    args: string[],
+    env: Dict<string>,
+    cwd: string
+): Promise<cp.ChildProcess> {
+    if (process.platform == 'darwin') {
+        // Make sure LLDB finds system Python before Brew Python
+        // https://github.com/Homebrew/legacy-homebrew/issues/47201
+        env['PATH'] = '/usr/bin:' + env['PATH'];
+    } else if (process.platform == 'win32') {
+        // Try to locate Python installation and add it to the PATH.
+        let pythonPath = await getPythonPathAsync;
+        if (pythonPath) {
+            env['PATH'] = env['PATH'] + ';' + pythonPath;
+        }
+        // LLDB will need python36.dll anyways, and we can provide a better error message
+        // if we preload it explicitly.
+        args.splice(0, 0, '--preload', 'python36.dll');
+    }
+    return cp.spawn(executable, args, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: env,
+        cwd: cwd
+    });
+}
+
+export async function getDebugServerPort(adapter: cp.ChildProcess): Promise<number> {
+    let regex = new RegExp('^Listening on port (\\d+)\\s', 'm');
+    let match = await waitForPattern(adapter, adapter.stdout, regex);
+    return parseInt(match[1]);
+}
+
+export function waitForPattern(
+    process: cp.ChildProcess,
+    channel: Readable,
+    pattern: RegExp,
+    timeoutMillis = 5000
+): Promise<RegExpExecArray> {
+    return new Promise<RegExpExecArray>((resolve, reject) => {
+        let promisePending = true;
+        let processOutput = '';
+        // Wait for expected pattern in channel.
+        channel.on('data', chunk => {
+            let chunkStr = chunk.toString();
+            if (promisePending) {
+                processOutput += chunkStr;
+                let match = pattern.exec(processOutput);
+                if (match) {
+                    clearTimeout(timer);
+                    processOutput = null;
+                    promisePending = false;
+                    resolve(match);
+                }
             }
         });
-    }
-    public terminate() {
-        if (this.isAlive) {
-            this.process.kill();
-        }
-    }
-    process: cp.ChildProcess;
+        // On spawn error.
+        process.on('error', err => {
+            promisePending = false;
+            reject(err);
+        });
+        // Bail if LLDB does not start within the specified timeout.
+        let timer = setTimeout(() => {
+            if (promisePending) {
+                process.kill();
+                let err = Error('The debugger did not start within the allotted time.');
+                (<any>err).code = 'Timeout';
+                (<any>err).stdout = processOutput;
+                promisePending = false;
+                reject(err);
+            }
+        }, timeoutMillis);
+        // Premature exit.
+        process.on('exit', (code, signal) => {
+            if (promisePending) {
+                let err = Error('The debugger exited without completing startup handshake.');
+                (<any>err).code = 'Handshake';
+                (<any>err).stdout = processOutput;
+                promisePending = false;
+                reject(err);
+            }
+        });
+    });
 }
 
-// Start debug adapter in TCP session mode and return the port number it is listening on.
-export async function startDebugAdapter(
-    context: ExtensionContext,
-    folder: WorkspaceFolder | undefined,
-    params: Dict<any>
-): Promise<AdapterProcess> {
-    let config = workspace.getConfiguration('lldb', folder ? folder.uri : undefined);
-    let adapterType = config.get('adapterType');
-    let adapterArgs: string[] = [];
-    let adapterExe: string;
-    let adapterEnv: Dict<string> = config.get('adapterEnv', null);
-    if (!adapterEnv)
-        adapterEnv = config.get('executable_env', {}); // legacy
-
-    if (adapterType != 'native') {
-        // Classic
-        if (config.get('verboseLogging', false))
-            params.logLevel = 0;
-        setIfDefined(params, config, 'reverseDebugging');
-        setIfDefined(params, config, 'suppressMissingSourceFiles');
-        setIfDefined(params, config, 'evaluationTimeout');
-        let paramsBase64 = new Buffer(JSON.stringify(params)).toString('base64');
-
-        adapterArgs = ['-b',
-            '-O', `command script import '${path.join(context.extensionPath, 'adapter')}'`,
-            '-O', `script adapter.run_tcp_session(0, '${paramsBase64}')`
-        ];
-        if (adapterType != 'classic2') {
-            adapterExe = config.get('executable', 'lldb');
-        } else {
-            adapterExe = path.join(context.extensionPath, 'lldb/bin/lldb');
-        }
-    } else {
-        // Native
-        if (config.get('verboseLogging', false)) {
-            adapterEnv['RUST_LOG'] = 'error,codelldb=debug';
-        }
-        let liblldb = config.get<string>('liblldb');
-        if (!liblldb) {
-            liblldb = await findLiblldb(path.join(context.extensionPath, 'lldb'));
-        }
-        adapterArgs = ['--preload-global', liblldb];
-
-        if (process.platform == 'win32') {
-            // Add liblldb's directory to PATH
-            let extraPath = [path.dirname(liblldb)];
-            // Try to locate Python installation, add it to PATH and tell codelldb to preload the python dll.
-            let pythonPath = await util.readRegistry('HKLM\\Software\\Python\\PythonCore\\3.6\\InstallPath', null);
-            if (pythonPath)
-                extraPath.push(pythonPath);
-            // liblldb will need python36.dll anyways, and we can provide a better error message
-            //adapterArgs = adapterArgs.concat('--preload', 'python36.dll');
-
-            adapterEnv['PATH'] = process.env['PATH'] + ';' + extraPath.join(';');
-        }
-        adapterExe = path.join(context.extensionPath, 'adapter2/codelldb');
-    }
-    let adapter = spawnDebugger(adapterArgs, adapterExe, adapterEnv);
-    let regex = new RegExp('^Listening on port (\\d+)\\s', 'm');
-    util.logProcessOutput(adapter, output);
-    let match = await util.waitForPattern(adapter, adapter.stdout, regex);
-
-    let adapterProc = new AdapterProcess(adapter);
-    adapterProc.port = parseInt(match[1]);
-    return adapterProc;
-}
-
-function setIfDefined(target: Dict<any>, config: WorkspaceConfiguration, key: string) {
-    let value = util.getConfigNoDefault(config, key);
-    if (value !== undefined)
-        target[key] = value;
-}
-
-// Spawn LLDB with the specified arguments, wait for it to output something matching
-// regex pattern, or until the timeout expires.
-export function spawnDebugger(args: string[], adapterPath: string, adapterEnv: Dict<string>): cp.ChildProcess {
+// Expand ${env:...} placeholders in extraEnv and merge it with the current process' environment.
+function mergeEnv(extraEnv: Dict<string>): Dict<string> {
     let env = Object.assign({}, process.env);
-    for (let key in adapterEnv) {
-        env[key] = util.expandVariables(adapterEnv[key], (type, key) => {
+    for (let key in extraEnv) {
+        env[key] = util.expandVariables(extraEnv[key], (type, key) => {
             if (type == 'env') return process.env[key];
             throw new Error('Unknown variable type ' + type);
         });
     }
-
-    let options: cp.SpawnOptions = {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: env,
-        cwd: workspace.rootPath
-    };
-    if (process.platform == 'darwin') {
-        // Make sure LLDB finds system Python before Brew Python
-        // https://github.com/Homebrew/legacy-homebrew/issues/47201
-        options.env['PATH'] = '/usr/bin:' + process.env['PATH'];
-    }
-    return cp.spawn(adapterPath, args, options);
+    return env;
 }
 
 async function findLiblldb(lldbRoot: string): Promise<string | null> {
