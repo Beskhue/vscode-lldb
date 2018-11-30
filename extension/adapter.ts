@@ -81,6 +81,7 @@ export async function spawnDebugAdapter(
         // Try to locate Python installation and add it to the PATH.
         let pythonPath = await getPythonPathAsync;
         if (pythonPath) {
+            // By this point, env keys will have been normalized to uppercase.
             env['PATH'] = env['PATH'] + ';' + pythonPath;
         }
     }
@@ -151,9 +152,15 @@ export function waitForPattern(
 
 // Expand ${env:...} placeholders in extraEnv and merge it with the current process' environment.
 function mergeEnv(extraEnv: Dict<string>): Dict<string> {
-    let env = Object.assign({}, process.env);
+    // Windows environment vars are case-inensitive, so we must normalize them.
+    let transformKey = process.platform == 'win32' ? (key: string) => key.toUpperCase() : (key: string) => key;
+
+    let env: Dict<any> = {};
+    for (let key in process.env)
+        env[transformKey(key)] = process.env[key];
+
     for (let key in extraEnv) {
-        env[key] = util.expandVariables(extraEnv[key], (type, key) => {
+        env[transformKey(key)] = util.expandVariables(extraEnv[key], (type, key) => {
             if (type == 'env') return process.env[key];
             throw new Error('Unknown variable type ' + type);
         });
