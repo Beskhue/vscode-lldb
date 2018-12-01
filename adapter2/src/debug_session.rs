@@ -956,8 +956,9 @@ impl DebugSession {
 
     fn configure_stdio(&mut self, args: &LaunchRequestArguments, launch_info: &mut SBLaunchInfo) -> Result<(), Error> {
         let terminal_kind = args.terminal.unwrap_or(TerminalKind::Console);
-        // TODO: use selected platform instead of cfg
-        let tty_name = if cfg!(unix) {
+
+        let tty_name = {
+            #[cfg(unix)]
             match terminal_kind {
                 TerminalKind::External | TerminalKind::Integrated => {
                     let terminal = Terminal::create(|args| self.run_in_vscode_terminal(terminal_kind.clone(), args))?;
@@ -967,18 +968,19 @@ impl DebugSession {
                 }
                 TerminalKind::Console => None,
             }
-        } else {
-            // cfg!(windows)
-            let without_console: &[u8] = match terminal_kind {
-                TerminalKind::External => b"false\0",
-                TerminalKind::Integrated | TerminalKind::Console => b"true\0",
-            };
-            // MSVC's getenv caches environment vars, so setting it via env::set_var() doesn't work.
-            put_env(
-                CStr::from_bytes_with_nul(b"LLDB_LAUNCH_INFERIORS_WITHOUT_CONSOLE\0").unwrap(),
-                CStr::from_bytes_with_nul(without_console).unwrap(),
-            );
-            None
+            #[cfg(windows)]
+            {
+                let without_console: &[u8] = match terminal_kind {
+                    TerminalKind::External => b"false\0",
+                    TerminalKind::Integrated | TerminalKind::Console => b"true\0",
+                };
+                // MSVC's getenv caches environment vars, so setting it via env::set_var() doesn't work.
+                put_env(
+                    CStr::from_bytes_with_nul(b"LLDB_LAUNCH_INFERIORS_WITHOUT_CONSOLE\0").unwrap(),
+                    CStr::from_bytes_with_nul(without_console).unwrap(),
+                );
+                None // No TTYs on Windows
+            }
         };
 
         let mut stdio = match args.stdio {
