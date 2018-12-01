@@ -9,6 +9,7 @@ use std::cell::RefCell;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::env;
+use std::ffi::CStr;
 use std::fmt::Write;
 use std::mem;
 use std::option;
@@ -970,11 +971,13 @@ impl DebugSession {
                     }
                 } else {
                     // cfg!(windows)
-                    let without_console = match terminal_kind {
-                        TerminalKind::External => "false",
-                        TerminalKind::Integrated | TerminalKind::Console => "true",
+                    let without_console: &[u8] = match terminal_kind {
+                        TerminalKind::External => b"false\0",
+                        TerminalKind::Integrated | TerminalKind::Console => b"true\0",
                     };
-                    env::set_var("LLDB_LAUNCH_INFERIORS_WITHOUT_CONSOLE", without_console);
+                    // MSVC's getenv caches environment vars, so setting it via env::set_var() doesn't work.
+                    put_env(CStr::from_bytes_with_nul(b"LLDB_LAUNCH_INFERIORS_WITHOUT_CONSOLE\0").unwrap(),
+                            CStr::from_bytes_with_nul(without_console).unwrap());
                     None
                 }
             }
@@ -2067,12 +2070,23 @@ where
     }
 }
 
-fn into_string_lossy(cstr: &std::ffi::CStr) -> String {
+fn into_string_lossy(cstr: &CStr) -> String {
     cstr.to_string_lossy().into_owned()
 }
 
 fn opt_as_ref<'a>(x: &'a Option<String>) -> Option<&'a str> {
     x.as_ref().map(|r| r.as_ref())
+}
+
+#[cfg(windows)]
+fn put_env(key: &CStr, value:&CStr) {
+    use ::std::os::raw::{c_char, c_int};
+    extern "C" {
+        fn _putenv_s(key: *const c_char, value: *const c_char) -> c_int;
+    }
+    unsafe {
+        _putenv_s(key.as_ptr(), value.as_ptr());
+    }
 }
 
 // Async adapter

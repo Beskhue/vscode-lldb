@@ -69,7 +69,7 @@
 			"preLaunchTask": "codelldb",
 			"program": "${workspaceFolder}/build/adapter2/codelldb.exe",
 			"args": [
-				"--lldb=${workspaceFolder}/build/lldb",
+				"--preload=${workspaceFolder}/build/lldb/bin/liblldb.dll",
 				"--multi-session",
 				"--port=4711"
 			],
