@@ -63,7 +63,7 @@ export async function startNative(
     return spawnDebugAdapter(executable, args, env, workDir);
 }
 
-let getPythonPathAsync = process.platform == 'win32' ?
+export const getPythonPathAsync = process.platform == 'win32' ?
     util.readRegistry('HKLM\\Software\\Python\\PythonCore\\3.6\\InstallPath', null) :
     null;
 

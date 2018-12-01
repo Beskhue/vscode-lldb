@@ -200,13 +200,13 @@ export async function readRegistry(path: string, value?: string): Promise<string
         reg.stdout.on('data', chunk => stdout += chunk.toString());
         reg.on('exit', code => {
             if (code != 0) {
-                reject(new Error(`Registry read failed: ${code}`));
+                resolve(null);
             } else {
                 let m = /REG_SZ\s+(.*)/.exec(stdout);
                 if (m) {
                     resolve(m[1]);
                 } else {
-                    reject(new Error('Registry read failed'));
+                    resolve(null);
                 }
             }
         });

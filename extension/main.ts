@@ -21,6 +21,8 @@ export function activate(context: ExtensionContext) {
     new Extension(context);
 }
 
+type AdapterType = 'classic' | 'classic2' | 'native';
+
 class Extension implements DebugConfigurationProvider {
     context: ExtensionContext;
     htmlViewer: htmlView.DebuggerHtmlView;
@@ -32,7 +34,7 @@ class Extension implements DebugConfigurationProvider {
         let subscriptions = context.subscriptions;
         subscriptions.push(debug.registerDebugConfigurationProvider('lldb', this));
 
-        subscriptions.push(commands.registerCommand('lldb.diagnose', () => diagnostics.diagnose(output)));
+        subscriptions.push(commands.registerCommand('lldb.diagnose', () => this.runDiagnostics()));
         subscriptions.push(commands.registerCommand('lldb.getCargoLaunchConfigs', () => this.getCargoLaunchConfigs()));
         subscriptions.push(commands.registerCommand('lldb.pickProcess', () => this.pickProcess(false)));
         subscriptions.push(commands.registerCommand('lldb.pickMyProcess', () => this.pickProcess(true)));
@@ -95,22 +97,10 @@ class Extension implements DebugConfigurationProvider {
         launchConfig: DebugConfiguration,
         token?: CancellationToken
     ): Promise<DebugConfiguration> {
-
-        let lldbConfig = workspace.getConfiguration('lldb', folder ? folder.uri : undefined);
-        let adapterType = lldbConfig.get('adapterType');
-        if (adapterType == 'classic') {
-            if (!this.context.globalState.get('lldb_works')) {
-                window.showInformationMessage("Since this is the first time you are starting LLDB, I'm going to run some quick diagnostics...");
-                if (!await diagnostics.diagnose(output))
-                    return undefined;
-                this.context.globalState.update('lldb_works', true);
-            }
-        } else {
-            if (!await install.ensurePlatformPackage(this.context, output))
-                return undefined;
-        }
-
         output.clear();
+
+        if (!this.checkPrerequisites(folder))
+            return undefined;
 
         let workspaceConfig = workspace.getConfiguration('lldb.launch', folder ? folder.uri : undefined);
         launchConfig = this.mergeWorkspaceSettings(launchConfig, workspaceConfig);
@@ -215,7 +205,7 @@ class Extension implements DebugConfigurationProvider {
         params: Dict<string>
     ): Promise<[ChildProcess, number]> {
         let config = workspace.getConfiguration('lldb', folder ? folder.uri : undefined);
-        let adapterType = config.get('adapterType');
+        let adapterType = this.getAdapterType(folder);
         let adapterEnv = config.get('executable_env', {});
         let verboseLogging = config.get<boolean>('verboseLogging');
         let adapterProcess;
@@ -248,7 +238,49 @@ class Extension implements DebugConfigurationProvider {
         let port = await adapter.getDebugServerPort(adapterProcess);
         return [adapterProcess, port];
     }
-};
+
+    async checkPrerequisites(folder: WorkspaceFolder | undefined): Promise<boolean> {
+        if (this.getAdapterType(folder) == 'classic') {
+            if (!this.context.globalState.get('lldb_works')) {
+                window.showInformationMessage("Since this is the first time you are starting LLDB, I'm going to run some quick diagnostics...");
+                if (!await diagnostics.diagnoseExternalLLDB(output))
+                    return false;
+                this.context.globalState.update('lldb_works', true);
+            }
+        } else {
+            if (!await diagnostics.checkPython(output))
+                return false;
+            if (!await install.ensurePlatformPackage(this.context, output))
+                return false;
+        }
+        return true;
+    }
+
+    async runDiagnostics() {
+        let adapterType = this.getAdapterType(undefined);
+        let succeeded;
+        switch (adapterType) {
+            case 'classic':
+                succeeded = await diagnostics.diagnoseExternalLLDB(output);
+                break;
+            case 'classic2':
+            case 'native':
+                succeeded = await diagnostics.checkPython(output);
+                break;
+        }
+        if (succeeded) {
+            window.showInformationMessage('LLDB self-test completed successfuly.');
+        }
+    }
+
+    getAdapterType(folder: WorkspaceFolder | undefined): AdapterType {
+        let lldbConfig = workspace.getConfiguration('lldb', folder ? folder.uri : undefined);
+        let adapterType = lldbConfig.get<string>('adapterType');
+        if (adapterType != 'classic2' && adapterType != 'native')
+            adapterType = 'classic';
+        return <AdapterType>adapterType;
+    }
+}
 
 class DisplaySettings {
     showDisassembly: string = 'auto'; // 'always' | 'auto' | 'never'

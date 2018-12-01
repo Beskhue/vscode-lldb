@@ -1,5 +1,5 @@
-import { workspace, window, commands, OutputChannel, ConfigurationTarget, Uri } from "vscode";
-import { inspect, format } from "util";
+import { workspace, window, commands, OutputChannel, ConfigurationTarget, Uri, WorkspaceFolder } from "vscode";
+import { inspect } from "util";
 import * as ver from './ver';
 import * as adapter from './adapter';
 import * as util from './util';
@@ -11,8 +11,7 @@ enum DiagnosticsStatus {
     NotFound = 3
 }
 
-export async function diagnose(output: OutputChannel): Promise<boolean> {
-    output.clear();
+export async function diagnoseExternalLLDB(output: OutputChannel, quiet = false): Promise<boolean> {
     let status = DiagnosticsStatus.Succeeded;
     try {
         output.appendLine('--- Checking version ---');
@@ -61,9 +60,8 @@ export async function diagnose(output: OutputChannel): Promise<boolean> {
         } else {
             if (ver.lt(version, desiredVersion)) {
                 output.appendLine(
-                    format('Warning: The version of your LLDB was detected as %s, which had never been tested with this extension. ' +
-                        'Please consider upgrading to least version %s.',
-                        version, desiredVersion));
+                    `Warning: The version of your LLDB was detected as ${version}, which had never been tested with this extension. ` +
+                    `Please consider upgrading to least version ${desiredVersion}.`);
                 status = DiagnosticsStatus.Warning;
             }
 
@@ -83,15 +81,18 @@ export async function diagnose(output: OutputChannel): Promise<boolean> {
 
         // If we updated adapterPath, ask user what to do.
         if (adapterPathOrginal != adapterPath) {
-            let action = await window.showInformationMessage(
-                format('Could not launch LLDB executable "%s", ' +
-                    'however we did locate a usable LLDB binary: "%s". ' +
-                    'Would you like to update LLDB configuration with this value?',
-                    adapterPathOrginal, adapterPath),
-                'Yes', 'No');
-            if (action == 'Yes') {
-                output.appendLine('Setting "lldb.executable": "' + adapterPath + '".');
-                config.update('executable', adapterPath, ConfigurationTarget.Global);
+            if (!quiet) {
+                let action = await window.showInformationMessage(
+                    `Could not launch LLDB executable "${adapterPathOrginal}", ` +
+                    `however we did locate a usable LLDB binary: "${adapterPath}". ` +
+                    `Would you like to update LLDB configuration with this value ? `, { modal: true },
+                    'Yes', 'No');
+                if (action == 'Yes') {
+                    output.appendLine('Setting "lldb.executable": "' + adapterPath + '".');
+                    config.update('executable', adapterPath, ConfigurationTarget.Global);
+                } else {
+                    status = DiagnosticsStatus.Failed;
+                }
             } else {
                 status = DiagnosticsStatus.Failed;
             }
@@ -102,24 +103,40 @@ export async function diagnose(output: OutputChannel): Promise<boolean> {
         output.appendLine(inspect(err));
         status = DiagnosticsStatus.Failed;
     }
-    output.show(true);
-    switch (<number>status) {
-        case DiagnosticsStatus.Succeeded:
-            window.showInformationMessage('LLDB self-test completed successfuly.');
-            break;
-        case DiagnosticsStatus.Warning:
-            window.showWarningMessage('LLDB self-test completed with warnings.  Please check LLDB output panel for details.');
-            break;
-        case DiagnosticsStatus.Failed:
-            window.showErrorMessage('LLDB self-test has failed!');
-            break;
-        case DiagnosticsStatus.NotFound:
-            let action = await window.showErrorMessage('Could not find LLDB on your system.', 'Show installation instructions');
-            if (action != null)
-                commands.executeCommand('vscode.open', Uri.parse('https://github.com/vadimcn/vscode-lldb/wiki/Installing-LLDB'));
-            break;
+    if (!quiet) {
+        output.show(true);
+        switch (status) {
+            case DiagnosticsStatus.Warning:
+                window.showWarningMessage('LLDB self-test completed with warnings.  Please check LLDB output panel for details.');
+                break;
+            case DiagnosticsStatus.Failed:
+                window.showErrorMessage('LLDB self-test has failed!');
+                break;
+            case DiagnosticsStatus.NotFound:
+                let action = await window.showErrorMessage('Could not find LLDB on this machine.', { modal: true },
+                    'Show installation instructions');
+                if (action != null)
+                    commands.executeCommand('vscode.open', Uri.parse('https://github.com/vadimcn/vscode-lldb/wiki/Installing-LLDB'));
+                break;
+        }
     }
     return status < DiagnosticsStatus.Failed;
+}
+
+export async function checkPython(output: OutputChannel, quiet = false) {
+    if (process.platform == 'win32') {
+        let path = await adapter.getPythonPathAsync;
+        if (path == null) {
+            let action = await window.showErrorMessage(
+                'CodeLLDB requires Python 3.6 (64-bit), but looks like it is not installed on this machine.', { modal: true },
+                'Take me to Python website');
+            if (action != null)
+                commands.executeCommand('vscode.open', 'https://www.python.org/downloads/windows/');
+            return false;
+        } else {
+            return true;
+        }
+    }
 }
 
 export async function analyzeStartupError(err: Error, output: OutputChannel) {
@@ -130,7 +147,7 @@ export async function analyzeStartupError(err: Error, output: OutputChannel) {
     let actionAsync;
     if (e.code == 'ENOENT') {
         actionAsync = window.showErrorMessage(
-            format('Could not start debugging because executable \'%s\' was not found.', e.path),
+            `Could not start debugging because executable "${e.path}" was not found.`,
             diagnostics);
     } else if (e.code == 'Timeout' || e.code == 'Handshake') {
         actionAsync = window.showErrorMessage(err.message, diagnostics);
@@ -139,6 +156,6 @@ export async function analyzeStartupError(err: Error, output: OutputChannel) {
     }
 
     if ((await actionAsync) == diagnostics) {
-        await diagnose(output);
+        await diagnoseExternalLLDB(output);
     }
 }
