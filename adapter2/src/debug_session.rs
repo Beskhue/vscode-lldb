@@ -955,33 +955,30 @@ impl DebugSession {
     }
 
     fn configure_stdio(&mut self, args: &LaunchRequestArguments, launch_info: &mut SBLaunchInfo) -> Result<(), Error> {
-        let tty_name = match args.terminal {
-            Some(ref terminal_kind) => {
-                if cfg!(unix) {
-                    // use selected platform instead of cfg
-                    match terminal_kind {
-                        TerminalKind::External | TerminalKind::Integrated => {
-                            let terminal =
-                                Terminal::create(|args| self.run_in_vscode_terminal(terminal_kind.clone(), args))?;
-                            let tty_name = terminal.tty_name().to_owned();
-                            self.terminal = Some(terminal);
-                            Some(tty_name)
-                        }
-                        TerminalKind::Console => None,
-                    }
-                } else {
-                    // cfg!(windows)
-                    let without_console: &[u8] = match terminal_kind {
-                        TerminalKind::External => b"false\0",
-                        TerminalKind::Integrated | TerminalKind::Console => b"true\0",
-                    };
-                    // MSVC's getenv caches environment vars, so setting it via env::set_var() doesn't work.
-                    put_env(CStr::from_bytes_with_nul(b"LLDB_LAUNCH_INFERIORS_WITHOUT_CONSOLE\0").unwrap(),
-                            CStr::from_bytes_with_nul(without_console).unwrap());
-                    None
+        let terminal_kind = args.terminal.unwrap_or(TerminalKind::Console);
+        // TODO: use selected platform instead of cfg
+        let tty_name = if cfg!(unix) {
+            match terminal_kind {
+                TerminalKind::External | TerminalKind::Integrated => {
+                    let terminal = Terminal::create(|args| self.run_in_vscode_terminal(terminal_kind.clone(), args))?;
+                    let tty_name = terminal.tty_name().to_owned();
+                    self.terminal = Some(terminal);
+                    Some(tty_name)
                 }
+                TerminalKind::Console => None,
             }
-            None => None,
+        } else {
+            // cfg!(windows)
+            let without_console: &[u8] = match terminal_kind {
+                TerminalKind::External => b"false\0",
+                TerminalKind::Integrated | TerminalKind::Console => b"true\0",
+            };
+            // MSVC's getenv caches environment vars, so setting it via env::set_var() doesn't work.
+            put_env(
+                CStr::from_bytes_with_nul(b"LLDB_LAUNCH_INFERIORS_WITHOUT_CONSOLE\0").unwrap(),
+                CStr::from_bytes_with_nul(without_console).unwrap(),
+            );
+            None
         };
 
         let mut stdio = match args.stdio {
@@ -2079,8 +2076,8 @@ fn opt_as_ref<'a>(x: &'a Option<String>) -> Option<&'a str> {
 }
 
 #[cfg(windows)]
-fn put_env(key: &CStr, value:&CStr) {
-    use ::std::os::raw::{c_char, c_int};
+fn put_env(key: &CStr, value: &CStr) {
+    use std::os::raw::{c_char, c_int};
     extern "C" {
         fn _putenv_s(key: *const c_char, value: *const c_char) -> c_int;
     }
